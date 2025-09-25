@@ -59,7 +59,7 @@ ENV LC_ALL=C
 # --------------------- APT UPDATE AND MANDATORY PACKAGES -------------------- #
 
 RUN apt update && apt upgrade -y
-RUN apt install -y ca-certificates build-essential curl libx11-6 libexpat1 git wget python3
+RUN apt install -y ca-certificates build-essential curl libx11-6 libexpat1 git wget python3 vim
 
 # -------------------------- ENERGYPLUS INSTALLATION ------------------------- #
 

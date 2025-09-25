@@ -1,0 +1,71 @@
+@startuml Sinergym SB3 RL 학습 코드
+
+' !theme plain
+skinparam backgroundColor #FFFFFF
+skinparam activity {
+   BackgroundColor #E8F4FD
+   BorderColor #4A90E2
+   FontColor #2C3E50
+   FontSize 12
+   DiamondBackgroundColor #FEFECE
+   ' ArrowColor #c5e02b
+}
+
+skinparam {
+    Shadowing true
+}
+
+title Sinergym SB3 RL 학습코드
+
+start
+
+
+
+
+
+' :환경 생성 : **gym.make()**;
+' :**DQNAgent(state_size, action_size))**
+' - 하이퍼 파라미터 초기화
+' - replay memory 초기화
+' - Q값 추정을 위한 NN 모델 생성 (훈련모델, 타겟모델)
+'    - in:state, out:각 action별 Q function value
+' - 타겟모델 초기화 : 타겟모델을 훈련모델의 가중치로 업데이트함;
+
+' while (훈련 에피소드 < 최대 에피소드 (300) ?) is (Yes)
+'    :**state, _ = env.reset()**
+'    환경 리셋 및 초기상태 얻음;
+   
+'    while (현재 에피소드가 종료 ?) is (No)
+'       :**agent.get_action(state)**
+'       현재상태에서 (ε-탐욕 방법)에 기반하여 다음행동을 선택함.
+'       즉, ε의 확률로 무작위 행동을 취하거나, 학습모델을 통해서 구한 최적 Q값을 내는 action을 리턴함;
+'       :**env.step(action)**
+'       action을 수행하여 reward, next_state 획득;
+'       :**agent.append_sample(s, a, r, s', done)**
+'       경험을 replay memory에 저장;
+      
+'       if (replay memory가 가득찼는가?) then (Yes)
+'          :**agent.train_model()**
+'          - ε (탐험률) 업데이트 (ε 을 지속적을 낮춤)
+'          - replay memory에서 무작위로 미니배치 추출 (64개)
+'          - "메인모델" 에서 현재 state에 대한 Q 값 추정
+'          - "타겟모델" 에서 next_state에 대한 Q-값 추정
+'             - Q함수에 대한 "벨만최적방정식" (Q*(s,a) ≈ r + γ * max Q(s',a'))을 
+'               이용하여 현재 state에 대한 최적 Q값 계산
+'          - "메인모델" 과 "타겟모델" 을 이용해서 각각 계산한 Q값을 이용해 loss 계산
+'          - "메인모델" 의 가중치 업데이트;
+'       endif
+      
+'       :state = next_state;
+'    endwhile (Yes)
+   
+'    :"타겟모델"의 가중치를 "메인모델"의 가중치로 업데이트;
+'    :훈련 에피소드++;
+' endwhile (No)
+
+' :훈련된 모델 저장;
+' :모델 성능 평가;
+
+stop
+
+@enduml
