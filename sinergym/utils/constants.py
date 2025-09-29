@@ -35,6 +35,29 @@ LOG_FORMAT = "[%(name)s] (%(levelname)s) : %(message)s"
 #              Default Eplus discrete environments action mappings             #
 # ---------------------------------------------------------------------------- #
 
+# -------------------------------------CompassCAV----------------------------- #
+
+# def DEFAULT_COMPASSCAV_DISCRETE_FUNCTION(action: int) -> np.ndarray:
+#     # SB3 algotihms returns a ndarray instead of a int
+#     if isinstance(action, np.ndarray):
+#         action = int(action.item())
+
+#     mapping = {
+#         0: np.array([12, 30], dtype=np.float32),
+#         1: np.array([13, 29], dtype=np.float32),
+#         2: np.array([14, 28], dtype=np.float32),
+#         3: np.array([15, 27], dtype=np.float32),
+#         4: np.array([16, 26], dtype=np.float32),
+#         5: np.array([17, 25], dtype=np.float32),
+#         6: np.array([18, 24], dtype=np.float32),
+#         7: np.array([19, 23.25], dtype=np.float32),
+#         8: np.array([20, 23.25], dtype=np.float32),
+#         9: np.array([21, 23.25], dtype=np.float32)
+#     }
+
+#     return mapping[action]
+
+
 # -------------------------------------5ZONE---------------------------------- #
 
 
