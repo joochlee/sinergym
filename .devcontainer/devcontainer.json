@@ -1,5 +1,5 @@
 {
-	"name": "sinergym",
+	"name": "sinergym_GPU",
 	"containerEnv": {
 		"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}"
 	},
@@ -12,6 +12,9 @@
 			"SINERGYM_EXTRAS" : "extras"
 		}
 	},
+	"runArgs": [
+    "--gpus=all"
+  ],
 	"dockerFile": "./Dockerfile",
 	"context": "..",
 	"customizations": {
