@@ -79,6 +79,7 @@ google-cloud-storage = { version = "^2.5.0", optional = true }
 #                        Group dependencies (develop)                        #
 # -------------------------------------------------------------------------- #
 tensorboard = "^2.20.0"
+pydot = "^4.0.1"
 [tool.poetry.group.format.dependencies]
 autopep8 = "^2.3.1"
 isort = "^5.13.2"

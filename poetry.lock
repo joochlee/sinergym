@@ -2792,6 +2792,28 @@ files = [
 ]
 
 [[package]]
+name = "pydot"
+version = "4.0.1"
+description = "Python interface to Graphviz's Dot"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "pydot-4.0.1-py3-none-any.whl", hash = "sha256:869c0efadd2708c0be1f916eb669f3d664ca684bc57ffb7ecc08e70d5e93fee6"},
+    {file = "pydot-4.0.1.tar.gz", hash = "sha256:c2148f681c4a33e08bf0e26a9e5f8e4099a82e0e2a068098f32ce86577364ad5"},
+]
+
+[package.dependencies]
+pyparsing = ">=3.1.0"
+
+[package.extras]
+dev = ["chardet", "parameterized", "pydot[lint]", "pydot[types]"]
+lint = ["ruff"]
+release = ["zest.releaser[recommended]"]
+tests = ["pydot[dev]", "pytest", "pytest-cov", "pytest-xdist[psutil]", "tox"]
+types = ["mypy"]
+
+[[package]]
 name = "pydot3k"
 version = "1.0.17"
 description = "Python interface to Graphviz's Dot"
@@ -4257,4 +4279,4 @@ test = ["coverage", "pytest", "pytest-cov", "pytest-xdist", "wandb"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "052910549dfe10f879fe86bf2470de3524fc7b0089cc76b4536a47beafb93888"
+content-hash = "703f404b33ca205720a6df9f4a280d4aaf35af434b46c719905dcfca607d52c7"
