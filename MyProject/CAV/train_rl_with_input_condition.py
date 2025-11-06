@@ -24,6 +24,10 @@ from sinergym.utils.logger import WandBOutputFormat
 from sinergym.utils.rewards import *
 from sinergym.utils.wrappers import *
 
+from random import choice
+# from sinergym.utils.wrappers import NormalizeObservation
+
+
 
 from datetime import datetime
 
@@ -33,8 +37,85 @@ from stable_baselines3.common.logger import HumanOutputFormat
 from stable_baselines3.common.logger import Logger as SB3Logger
 from stable_baselines3.common.monitor import Monitor
 
+
+from stable_baselines3.common.env_util import make_vec_env
+
+
 from torch.utils.tensorboard import SummaryWriter
 import torch
+
+
+# -----------------------------------------------------------------------------
+# 사용자 선호도 추가용 wrapper
+# ----------------------------------------------------------------------------- 
+# 사용자 선호 정의 (벡터 + 가중치)
+PREFERENCE_MAP = {
+   "economical": {
+      "vec": np.array([1.0, 0.0, 0.0]),
+      "reward_weight": 0.7  # (에너지, 쾌적도)
+   },
+   "balanced": {
+      "vec": np.array([0.0, 1.0, 0.0]),
+      "reward_weight": 0.5
+   },
+   "comfort": {
+      "vec": np.array([0.0, 0.0, 1.0]),
+      "reward_weight": 0.3
+   }
+}
+
+class PreferenceWrapper(gym.Wrapper):
+   def __init__(self, env, preference_type="balanced"):
+      super().__init__(env)
+      assert preference_type in PREFERENCE_MAP
+
+      self.preference_type = preference_type
+      self.preference_vec = PREFERENCE_MAP[preference_type]["vec"]
+      self.w_energy = PREFERENCE_MAP[preference_type]["reward_weight"]
+
+      # 상태 공간 확장
+      orig_obs_space = self.observation_space
+      self.observation_space = spaces.Box(
+         low=np.concatenate([orig_obs_space.low, np.zeros_like(self.preference_vec)]),
+         high=np.concatenate([orig_obs_space.high, np.ones_like(self.preference_vec)]),
+         dtype=np.float64
+      )
+
+   def reset(self, **kwargs):
+      obs, info = self.env.reset(**kwargs)
+      # 한 에피소드가 끝나면 "선호도"를 랜덤값으로 변경해서 다시 학습함
+      self.preference_type = choice(list(PREFERENCE_MAP))
+      self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
+      self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
+      # energy weight를 선호도에 맞게 업데이트
+      self.unwrapped.reward_fn.W_energy = self.w_energy
+
+      # 변경된 "선호도"를 상태에 업데이트함
+      obs = np.concatenate([obs, self.preference_vec])
+      return obs, info
+
+   def step(self, action):
+      obs, reward, done, truncated, info = self.env.step(action)
+
+      # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
+      # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
+      # energy = info.get('electricity_demand', 0.0)
+      # discomfort = info.get('comfort_penalty', 0.0)
+
+      # shaped_reward = - (self.w_energy * energy + self.w_discomfort * discomfort)
+
+      obs = np.concatenate([obs, self.preference_vec])
+      return obs, reward, done, truncated, info
+
+
+
+def make_env_with_random_preference(env_id="Eplus-office-small-continuous-v1"):
+    def _init():
+        base_env = gym.make(env_id)
+        normed_env = NormalizeObservation(base_env)  # 관측 정규화
+        pref_type = choice(["economical", "balanced", "comfort"])
+        return PreferenceWrapper(normed_env, preference_type=pref_type)
+    return _init
 
 
 def transform_action(action):
@@ -82,6 +163,7 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
 env = NormalizeAction(env)  # 액션 정규화
 env = NormalizeObservation(env)  # 관찰값 정규화
+env = PreferenceWrapper(env)  # 선호도
 env = LoggerWrapper(env)  # 로깅 래퍼
 env = CSVLogger(env)  # CSV 로깅
 env = Monitor(env)  # 모니터링
@@ -95,6 +177,9 @@ eval_env = CSVLogger(eval_env)
 eval_env = Monitor(eval_env)
 
 
+# -----------------------------------------------------------------------------
+# tensorboard 출력을 위한 콜백 클래스
+# ----------------------------------------------------------------------------- 
 class SinergymTBCallback(BaseCallback):
    def __init__(self, verbose=0):
       super().__init__(verbose)
@@ -221,6 +306,10 @@ class SinergymTBCallback(BaseCallback):
                   self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
                   self.writer.add_scalar("perf/ep_total_temperature_violation", ep_total_temperature_violation_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
                
+               # episode 에서 사용한 reward_weight의 값을 로깅
+               self.writer.add_scalar("perf/ep_reward_weight", info.get('reward_weight', 0.0), self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
+
+
                # EP Total Temperature Violation 의 rolling 평균 계산 (최근 100개 에피소드)
                # self.ep_mean_total_temperature_violation_rolling.append(sum(self.ep_total_temperature_violation))
                # self.ep_total_temperature_violation = []
@@ -260,7 +349,10 @@ class SinergymTBCallback(BaseCallback):
 
 
 
+
+# -----------------------------------------------------------------------------
 # GPU 사용 가능 여부 확인
+# ----------------------------------------------------------------------------- 
 # PPO with MlpPolicy는 GPU보다 CPU가 더 빠름, 아래 경고메시지 참고 (by jclee)
 # /usr/local/lib/python3.12/dist-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
 device = 'cpu'
@@ -273,7 +365,10 @@ device = 'cpu'
 #    print("GPU를 사용할 수 없습니다. CPU로 실행됩니다.")
 
 
+
+# ----------------------------------------------------------------------------- 
 # PPO 모델 생성 (기본 하이퍼 파라미터사용)
+# ----------------------------------------------------------------------------- 
 # model = PPO('MlpPolicy', env, verbose=1, tensorboard_log='./tb_logs')
 
 # PPO 모델 생성 (GPU 사용 설정 및 최적화된 하이퍼파라미터)
@@ -373,14 +468,19 @@ print('===> Is the action space discrete?: {}'.format(
    env.get_wrapper_attr('is_discrete')))
 
 
+# -----------------------------------------------------------------------------
 # 모델 훈련 실행
+# ----------------------------------------------------------------------------- 
 model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_ew_0.5')  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo_dymanic_preference')  # TensorBoard 로그 이름
 
+
+# -----------------------------------------------------------------------------
 # 훈련된 모델 저장
+# ----------------------------------------------------------------------------- 
 model.save(env.get_wrapper_attr('workspace_path') + '/model')
 
 # 주석 처리된 수동 에피소드 실행 코드
