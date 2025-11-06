@@ -19,8 +19,10 @@ weather_specification:
 # ---------------------------------------------------------------------------- #
 #                         BUILDING EXTRA CONFIGURATION                         #
 # ---------------------------------------------------------------------------- #
-building_config: null
+building_config:
+  timesteps_per_hour: 3
 
+seed: 321
 
 # ---------------------------------------------------------------------------- #
 #                        WEATHER VARIABILITY (OPTIONAL)                        #
@@ -192,11 +194,11 @@ reward_kwargs:
   summer_final:
     - 9
     - 30
-  # 전력소모 == 열쾌적성
+  # 1. 전력소모 == 열쾌적성
   # energy_weight: 0.5
-  # 전력소모에 더 중점
+  # 2. 전력소모에 더 중점
   # energy_weight: 0.7
-  # 열쾌적성에 더 중점
+  # 3. 열쾌적성에 더 중점
   energy_weight: 0.3
   lambda_energy: 1.0e-4
   lambda_temperature: 1.0

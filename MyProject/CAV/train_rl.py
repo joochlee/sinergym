@@ -1,4 +1,5 @@
 import logging
+from collections import deque
 
 import gymnasium as gym
 import numpy as np
@@ -57,7 +58,7 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 15  # 훈련 에피소드 수
+episodes = 200  # 훈련 에피소드 수
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
@@ -97,13 +98,16 @@ eval_env = Monitor(eval_env)
 class SinergymTBCallback(BaseCallback):
    def __init__(self, verbose=0):
       super().__init__(verbose)
-      self.ep_rewards = deque(maxlen=100)  # 최근 100개 에피소드 보상 저장
+      self.ep_rewards = deque(maxlen=10)  # 최근 100개 에피소드 보상 저장
       self.step_count = 0  # 콜백 호출 횟수 추적
 
       # self._energy_buffer = []  # 에너지 버퍼 (현재 사용하지 않음)
 
       self.ep_total_power_demand = []
-      self.ep_mean_total_power_demand_rolling = []
+      self.ep_mean_total_power_demand_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
+
+      self.ep_total_temperature_violation = []
+      self.ep_mean_total_temperature_violation_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
 
    def _on_training_start(self) -> None:
       """훈련 시작 시 TensorBoard writer 초기화"""
@@ -130,30 +134,39 @@ class SinergymTBCallback(BaseCallback):
       #         self.logger.record("custom/discomfort_step", float(discomfort))
       
       # 환경에서 받은 정보 중 마지막 정보를 가져옴
-      info = self.locals.get('infos')[-1]
+      infos_list = self.locals.get('infos')
+      if infos_list is None or len(infos_list) == 0:
+         return True
+      info = infos_list[-1]
 
 
       # TensorBoard에 현재 스텝의 보상값을 기록 (카테고리: result/reward, 값: reward, x축: timesteps)
       reward_value = info.get('reward', 0.0)
       self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
       
+      # TensorBoard에 현재 스텝의 total power demand 기록 (카테고리: energy/total_power_demand, 값: power demand, x축: timesteps)
       total_power_demand_value = info.get('total_power_demand', 0.0)
       self.ep_total_power_demand.append(total_power_demand_value)
       self.writer.add_scalar("energy/total_power_demand", total_power_demand_value, self.num_timesteps)
       
+      # energy term
       energy_term_value = info.get('energy_term', 0.0)
       self.writer.add_scalar("energy/energy_term", energy_term_value, self.num_timesteps)
 
+      # energy penalty
       energy_penalty_value = info.get('energy_penalty', 0.0)
       self.writer.add_scalar("energy/energy_penalty", energy_penalty_value, self.num_timesteps)
       
+      # total_temperature_violation
       total_temperature_violation_value = info.get('total_temperature_violation', 0.0)
-      self.ep_total_power_demand.append(total_temperature_violation_value)
+      self.ep_total_temperature_violation.append(total_temperature_violation_value)
       self.writer.add_scalar("comfort/total_temperature_violation", total_temperature_violation_value, self.num_timesteps)
       
+      # comfort term
       comfort_term_value = info.get('comfort_term', 0.0)
       self.writer.add_scalar("comfort/comfort_term", comfort_term_value, self.num_timesteps)
 
+      # comfort penalty
       comport_penalty_value = info.get('comfort_penalty', 0.0)
       self.writer.add_scalar("comfort/comfort_penalty", comport_penalty_value, self.num_timesteps)
 
@@ -175,7 +188,7 @@ class SinergymTBCallback(BaseCallback):
                ep_length = info["episode"]["l"]  # 에피소드 길이
                self.ep_rewards.append(ep_r)
 
-               # rolling 평균 계산 (최근 100개 에피소드)
+               # EP Reward의 rolling 평균 계산 (최근 100개 에피소드)
                mean_r = sum(self.ep_rewards) / len(self.ep_rewards)
                print(f'\n🎯 EPISODE COMPLETED! 🎯')
                print(f'Episode #{len(self.ep_rewards)}: Reward = {ep_r:.2f}, Length = {ep_length}')
@@ -184,11 +197,36 @@ class SinergymTBCallback(BaseCallback):
                print(f'Current Timestep: {self.num_timesteps}')
                self.writer.add_scalar("perf/ep_rew_mean_rolling", mean_r, self.num_timesteps)
 
-               self.ep_mean_total_power_demand_rolling.append(sum(self.ep_total_power_demand))
-               self.ep_total_power_demand = []
-               self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", \
-                  sum(self.ep_mean_total_power_demand_rolling)/len(self.ep_mean_total_power_demand_rolling), \
-                      self.num_timesteps)
+               # EP Total Power Demand의 rolling 평균 계산 (최근 100개 에피소드)
+               # 에피소드당 총 power demand 합계를 저장 (에피소드 평균이 아니라 합계)
+               ep_total_power_demand_sum = sum(self.ep_total_power_demand) if self.ep_total_power_demand else 0.0
+               self.ep_mean_total_power_demand_rolling.append(ep_total_power_demand_sum)
+               self.ep_total_power_demand = []  # 다음 에피소드를 위해 초기화
+               
+               # Rolling 평균 계산 (최근 100개 에피소드)
+               if len(self.ep_mean_total_power_demand_rolling) > 0:
+                  rolling_mean = sum(self.ep_mean_total_power_demand_rolling) / len(self.ep_mean_total_power_demand_rolling)
+                  self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", rolling_mean, self.num_timesteps)
+                  self.writer.add_scalar("perf/ep_total_power_demand", ep_total_power_demand_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
+
+               # EP Total Temperature Violation의 rolling 평균 계산 (최근 100개 에피소드)
+               # 에피소드당 총 temperature violation 합계를 저장 (에피소드 평균이 아니라 합계)
+               ep_total_temperature_violation_sum = sum(self.ep_total_temperature_violation) if self.ep_total_temperature_violation else 0.0
+               self.ep_mean_total_temperature_violation_rolling.append(ep_total_temperature_violation_sum)
+               self.ep_total_temperature_violation = []  # 다음 에피소드를 위해 초기화
+               
+               # Rolling 평균 계산 (최근 100개 에피소드)
+               if len(self.ep_mean_total_temperature_violation_rolling) > 0:
+                  rolling_mean = sum(self.ep_mean_total_temperature_violation_rolling) / len(self.ep_mean_total_temperature_violation_rolling)
+                  self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
+                  self.writer.add_scalar("perf/ep_total_temperature_violation", ep_total_temperature_violation_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
+               
+               # EP Total Temperature Violation 의 rolling 평균 계산 (최근 100개 에피소드)
+               # self.ep_mean_total_temperature_violation_rolling.append(sum(self.ep_total_temperature_violation))
+               # self.ep_total_temperature_violation = []
+               # self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", \
+               #    sum(self.ep_mean_total_temperature_violation_rolling)/len(self.ep_mean_total_temperature_violation_rolling), \
+               #        self.num_timesteps)
 
       # 매 10 스텝마다 강제로 flush (즉시 반영)
       if self.num_timesteps % 10 == 0:
@@ -340,7 +378,7 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='ppo_cav_0.3')  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo_ew_0.3')  # TensorBoard 로그 이름
 
 # 훈련된 모델 저장
 model.save(env.get_wrapper_attr('workspace_path') + '/model')
