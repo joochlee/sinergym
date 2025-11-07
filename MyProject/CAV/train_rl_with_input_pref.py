@@ -139,7 +139,7 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 200  # 훈련 에피소드 수
+episodes = 900  # 훈련 에피소드 수
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
@@ -163,10 +163,10 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
 env = NormalizeAction(env)  # 액션 정규화
 env = NormalizeObservation(env)  # 관찰값 정규화
-env = PreferenceWrapper(env)  # 선호도
 env = LoggerWrapper(env)  # 로깅 래퍼
 env = CSVLogger(env)  # CSV 로깅
 env = Monitor(env)  # 모니터링
+env = PreferenceWrapper(env)  # 선호도
 
 # 평가 환경에 래퍼 적용
 eval_env = TransformAction(eval_env, transform_action, eval_env.action_space)
