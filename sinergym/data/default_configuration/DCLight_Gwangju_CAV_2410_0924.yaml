@@ -2,17 +2,16 @@
 # ---------------------------------------------------------------------------- #
 #                        ID BASE FROM ENVIRONMNET NAMES                        #
 # ---------------------------------------------------------------------------- #
-id_base: CompassCAV
+id_base: DCLight
 
 # ---------------------------------------------------------------------------- #
 #                         BUILDING AND WEATHER SETTINGS                        #
 # ---------------------------------------------------------------------------- #
-building_file: Gwangju_CAV_2410_0924.epJSON
+building_file: DCLight_Gwangju_CAV_2410_0924.epJSON
 
 # A environment alternative for each weather key
 weather_specification:
   weather_files:
-    # - KOR_KG_Osan.AB.471220_TMYx.2009-2023.epw
     - KOR_KJ_Gwangju.471560_TMYx.2009-2023.epw
   keys:
     - normal
@@ -22,7 +21,6 @@ weather_specification:
 # ---------------------------------------------------------------------------- #
 building_config:
   timesteps_per_hour: 3
-  # timesteps_per_hour: 12
 
 seed: 321
 
@@ -54,6 +52,16 @@ time_variables:
 
 # ----------------------------- OUTPUT:VARIABLES ----------------------------- #
 variables:
+  # 조명전력소모량
+  Lights Electricity Rate:
+    variable_names: lights_electricity_rate
+    keys:
+      - CORE_ZN_LIGHTS
+      - PERIMETER_ZN_1_LIGHTS
+      - PERIMETER_ZN_2_LIGHTS
+      - PERIMETER_ZN_3_LIGHTS
+      - PERIMETER_ZN_4_LIGHTS
+
   # 존, 온도, 습도, CO2
   Zone Mean Air temperature:
     variable_names: mean_air_temperature

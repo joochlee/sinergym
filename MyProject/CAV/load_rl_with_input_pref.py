@@ -53,7 +53,7 @@ import torch
 PREFERENCE_MAP = {
    "economical": {
       "vec": np.array([1.0, 0.0, 0.0]),
-      "reward_weight": 0.7  # energy_weight
+      "reward_weight": 0.8  # energy_weight
    },
    "balanced": {
       "vec": np.array([0.0, 1.0, 0.0]),
@@ -61,7 +61,7 @@ PREFERENCE_MAP = {
    },
    "comfort": {
       "vec": np.array([0.0, 0.0, 1.0]),
-      "reward_weight": 0.3
+      "reward_weight": 0.2
    }
 }
 
@@ -108,6 +108,7 @@ class PreferenceWrapper(gym.Wrapper):
 
    def step(self, action):
       obs, reward, done, truncated, info = self.env.step(action)
+      # obs, reward, done, truncated, info = self.unwrapped.step(action)
 
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
@@ -132,6 +133,22 @@ def transform_action(action):
    return np.array([continuous1, continuous2, discrete], dtype=np.float32)
 
 
+def find_wrapper(env, wrapper_class):
+   """원하는 wrapper를 찾는 함수
+
+   Args:
+      env (gym.Wrapper): wrapper
+      wrapper_class (any): 찾고자 하는 wrapper type
+
+Returns:
+      any: 찾은 wrapper
+   """
+   while hasattr(env, 'env'):
+      if isinstance(env, wrapper_class):
+         return env
+      env = env.env
+   return None
+
 # 로거 설정
 terminal_logger = TerminalLogger()
 logger = terminal_logger.getLogger(
@@ -141,7 +158,7 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 1  # 훈련 에피소드 수
+episodes = 1  # 실행 에피소드 수
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
@@ -165,6 +182,7 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
 env = NormalizeAction(env)  # 액션 정규화
 env = NormalizeObservation(env)  # 관찰값 정규화
+env = PreferenceWrapper(env)  # 선호도
 
 # env = LoggerWrapper(env)  # 로깅 래퍼
 # env = CSVLogger(env)  # CSV 로깅
@@ -177,178 +195,6 @@ env = NormalizeObservation(env)  # 관찰값 정규화
 # eval_env = LoggerWrapper(eval_env)
 # eval_env = CSVLogger(eval_env)
 # eval_env = Monitor(eval_env)
-
-
-# -----------------------------------------------------------------------------
-# tensorboard 출력을 위한 콜백 클래스
-# ----------------------------------------------------------------------------- 
-class SinergymTBCallback(BaseCallback):
-   def __init__(self, verbose=0):
-      super().__init__(verbose)
-      self.ep_rewards = deque(maxlen=10)  # 최근 100개 에피소드 보상 저장
-      self.step_count = 0  # 콜백 호출 횟수 추적
-
-      # self._energy_buffer = []  # 에너지 버퍼 (현재 사용하지 않음)
-
-      self.ep_total_power_demand = []
-      self.ep_mean_total_power_demand_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
-
-      self.ep_total_temperature_violation = []
-      self.ep_mean_total_temperature_violation_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
-
-   def _on_training_start(self) -> None:
-      """훈련 시작 시 TensorBoard writer 초기화"""
-      self.writer = SummaryWriter(log_dir = self.logger.dir)
-      return super()._on_training_start()
-
-   def _on_step(self) -> bool:
-      """
-      각 스텝마다 호출되는 함수
-      보상값과 에피소드 정보를 TensorBoard에 기록
-      """
-      # 주석 처리된 에너지/불편함 로깅 코드
-      # infos = self.locals.get("infos", [])
-      # if infos:
-      #     info = infos[-1]
-      #     # 예시 키: Sinergym 환경/리포트에 맞춰 실제 키로 교체하세요
-      #     energy = info.get("electricity_power")  # kW 등
-      #     discomfort = info.get("discomfort")     # 0~1 스칼라 등
-      #     if energy is not None:
-      #         self._energy_buffer.append(energy)
-      #         # step 단위 로그
-      #         self.logger.record("custom/energy_step", float(energy))
-      #     if discomfort is not None:
-      #         self.logger.record("custom/discomfort_step", float(discomfort))
-      
-      # 환경에서 받은 정보 중 마지막 정보를 가져옴
-      infos_list = self.locals.get('infos')
-      if infos_list is None or len(infos_list) == 0:
-         return True
-      info = infos_list[-1]
-
-
-      # TensorBoard에 현재 스텝의 보상값을 기록 (카테고리: result/reward, 값: reward, x축: timesteps)
-      reward_value = info.get('reward', 0.0)
-      self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
-      
-      # TensorBoard에 현재 스텝의 total power demand 기록 (카테고리: energy/total_power_demand, 값: power demand, x축: timesteps)
-      total_power_demand_value = info.get('total_power_demand', 0.0)
-      self.ep_total_power_demand.append(total_power_demand_value)
-      self.writer.add_scalar("energy/total_power_demand", total_power_demand_value, self.num_timesteps)
-      
-      # energy term
-      energy_term_value = info.get('energy_term', 0.0)
-      self.writer.add_scalar("energy/energy_term", energy_term_value, self.num_timesteps)
-
-      # energy penalty
-      energy_penalty_value = info.get('energy_penalty', 0.0)
-      self.writer.add_scalar("energy/energy_penalty", energy_penalty_value, self.num_timesteps)
-      
-      # total_temperature_violation
-      total_temperature_violation_value = info.get('total_temperature_violation', 0.0)
-      self.ep_total_temperature_violation.append(total_temperature_violation_value)
-      self.writer.add_scalar("comfort/total_temperature_violation", total_temperature_violation_value, self.num_timesteps)
-      
-      # comfort term
-      comfort_term_value = info.get('comfort_term', 0.0)
-      self.writer.add_scalar("comfort/comfort_term", comfort_term_value, self.num_timesteps)
-
-      # comfort penalty
-      comport_penalty_value = info.get('comfort_penalty', 0.0)
-      self.writer.add_scalar("comfort/comfort_penalty", comport_penalty_value, self.num_timesteps)
-
-
-         
-      # 디버깅: 매 100 스텝마다 로그 출력
-      # self.step_count += 1
-      # if self.num_timesteps % 100 == 0:
-      #     print(f"Step {self.num_timesteps}: Reward = {reward_value:.4f}, Callback calls = {self.step_count}")
-      
-      # 에피소드 정보 처리
-      infos = self.locals.get("infos")
-      if infos is not None:
-         for info in infos:
-            # Monitor 래퍼가 episode 종료 시 info["episode"] 추가
-            if "episode" in info.keys():
-               print(f'\n===> self.locals.info \n{info}\n')
-               ep_r = info["episode"]["r"]  # 해당 episode의 총 보상
-               ep_length = info["episode"]["l"]  # 에피소드 길이
-               self.ep_rewards.append(ep_r)
-
-               # EP Reward의 rolling 평균 계산 (최근 100개 에피소드)
-               mean_r = sum(self.ep_rewards) / len(self.ep_rewards)
-               print(f'\n🎯 EPISODE COMPLETED! 🎯')
-               print(f'Episode #{len(self.ep_rewards)}: Reward = {ep_r:.2f}, Length = {ep_length}')
-               print(f'Rolling Average: {mean_r:.2f} (over {len(self.ep_rewards)} episodes)')
-               print(f"📊 Recent episodes: {list(self.ep_rewards)[-5:]}")  # 최근 5개 에피소드
-               print(f'Current Timestep: {self.num_timesteps}')
-               self.writer.add_scalar("perf/ep_rew_mean_rolling", mean_r, self.num_timesteps)
-
-               # EP Total Power Demand의 rolling 평균 계산 (최근 100개 에피소드)
-               # 에피소드당 총 power demand 합계를 저장 (에피소드 평균이 아니라 합계)
-               ep_total_power_demand_sum = sum(self.ep_total_power_demand) if self.ep_total_power_demand else 0.0
-               self.ep_mean_total_power_demand_rolling.append(ep_total_power_demand_sum)
-               self.ep_total_power_demand = []  # 다음 에피소드를 위해 초기화
-               
-               # Rolling 평균 계산 (최근 100개 에피소드)
-               if len(self.ep_mean_total_power_demand_rolling) > 0:
-                  rolling_mean = sum(self.ep_mean_total_power_demand_rolling) / len(self.ep_mean_total_power_demand_rolling)
-                  self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", rolling_mean, self.num_timesteps)
-                  self.writer.add_scalar("perf/ep_total_power_demand", ep_total_power_demand_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
-
-               # EP Total Temperature Violation의 rolling 평균 계산 (최근 100개 에피소드)
-               # 에피소드당 총 temperature violation 합계를 저장 (에피소드 평균이 아니라 합계)
-               ep_total_temperature_violation_sum = sum(self.ep_total_temperature_violation) if self.ep_total_temperature_violation else 0.0
-               self.ep_mean_total_temperature_violation_rolling.append(ep_total_temperature_violation_sum)
-               self.ep_total_temperature_violation = []  # 다음 에피소드를 위해 초기화
-               
-               # Rolling 평균 계산 (최근 100개 에피소드)
-               if len(self.ep_mean_total_temperature_violation_rolling) > 0:
-                  rolling_mean = sum(self.ep_mean_total_temperature_violation_rolling) / len(self.ep_mean_total_temperature_violation_rolling)
-                  self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
-                  self.writer.add_scalar("perf/ep_total_temperature_violation", ep_total_temperature_violation_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
-               
-               # episode 에서 사용한 reward_weight의 값을 로깅
-               self.writer.add_scalar("perf/ep_reward_weight", info.get('reward_weight', 0.0), self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
-
-
-               # EP Total Temperature Violation 의 rolling 평균 계산 (최근 100개 에피소드)
-               # self.ep_mean_total_temperature_violation_rolling.append(sum(self.ep_total_temperature_violation))
-               # self.ep_total_temperature_violation = []
-               # self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", \
-               #    sum(self.ep_mean_total_temperature_violation_rolling)/len(self.ep_mean_total_temperature_violation_rolling), \
-               #        self.num_timesteps)
-
-      # 매 10 스텝마다 강제로 flush (즉시 반영)
-      if self.num_timesteps % 10 == 0:
-         self.writer.flush()
-
-
-      # 스텝별 보상값 기록
-      # step_rewards = self.locals.get('rewards')
-      # self.writer.add_scalar("result/step_reward", step_rewards, self.num_timesteps)
-
-      # if (self.num_timesteps % 4) == 0:
-      # self.logger.record('result/reward', float(info.get('reward')))
-
-      # print(f'======> reward : {info.get("reward")}\n')
-      # print(
-      #     f'======> n_step : {
-      #         self.model.n_steps}, n_envs: {
-      #         self.model.n_envs}\n')
-
-      return True
-
-   # def _on_rollout_end(self) -> None:
-   #     if self._energy_buffer:
-   #         self.logger.record("custom/energy_rollout_mean",
-   #                            float(np.mean(self._energy_buffer)))
-   #         self._energy_buffer.clear()
-   def _on_training_end(self) -> None:
-      """훈련 종료 시 TensorBoard writer 정리"""
-      self.writer.flush()  # 버퍼에 남은 데이터 모두 기록
-      self.writer.close()  # writer 종료
-
 
 
 
@@ -416,7 +262,9 @@ device = 'cpu'
 #    # } if device == 'cuda' else None
 # )
 
-MODEL_PATH = './trained_model/model.zip'
+# MODEL_PATH = './trained_model/model_ew_0.7.zip'
+# MODEL_PATH = './trained_model/model_ew_0.3.zip'
+MODEL_PATH = './trained_model/model_dynamic_pref.zip'
 LOG_DIR = './tb_logs/evaluation'
 
 # save된 학습모델 로딩
@@ -431,9 +279,7 @@ timesteps = episodes * (env.get_wrapper_attr('timestep_per_episode') - 1)
 print(f'\n===> 1ep 당 timesteps: \n{timesteps}\n')
 
 # TimeLimit 래퍼로 최대 스텝 제한 (예: 500 스텝)
-env = TimeLimit(env, max_episode_steps=timesteps)
-# 선호도 wrapper
-env = PreferenceWrapper(env)  # 선호도
+# env = TimeLimit(env, max_episode_steps=timesteps)
 
 # 100 스텝마다 total_power_demand의 rolling average를 구함
 q_len = 10
@@ -441,11 +287,24 @@ mean_total_power_demand_rolling = deque(maxlen=q_len)  # 최근 100개 스텝만
 
 
 # 한 에피소드 (1년) 동안 테스트
+pref_env = find_wrapper(env, PreferenceWrapper)
+if pref_env:
+   # pref_env.set_pref('balanced')
+   pref_env.set_pref('comfort')
+   # pref_env.set_pref('economical')
+   print(f'\n===> 선호도 초기설정 : \n{pref_env.w_energy}\n')
+else:
+   print(f'\n===> Error! PreferenceWrapper not found! \n')
+   exit(-1)
 
-env.set_pref('comfort')
+# env.set_pref('comfort')
 
 for episode in range(episodes):
    obs, info = env.reset()
+
+   print(f'\n===> obs \n{obs}\n')
+   print(f'\n===> info \n{info}\n')
+
    done = False
    truncated = False
    total_reward = 0.0
@@ -455,13 +314,19 @@ for episode in range(episodes):
    power_demand_1 = 0.0
    power_demand_2 = 0.0
 
-   while not (done or truncated):
+   while not (done or truncated or (timesteps < steps)):
       action, _states = model.predict(obs, deterministic=True)
+
+      # print(f'\n===> obs \n{obs}\n')
+
       obs, reward, done, truncated, info = env.step(action)
+
       # print(f'\n===> info \n{info}\n')
+
       total_reward += reward
       writer.add_scalar('eval/step_reward', reward, steps)
       writer.add_scalar('eval/total_power_demand', info['total_power_demand'], steps)
+      writer.add_scalar('eval/total_temperature_violation', info['total_temperature_violation'], steps)
       
       # total_power_demand_sum = sum(self.ep_total_power_demand) if self.ep_total_power_demand else 0.0
       mean_total_power_demand_rolling.append(info['total_power_demand'])
@@ -477,8 +342,11 @@ for episode in range(episodes):
 
       # -----------------------------------------
 
-      if steps == 10000:
-         env.set_pref('economical')
+      # if steps == 10000:
+      #    # pref_env.set_pref('comfort')
+      #    pref_env.set_pref('economical')
+      
+      # env.set_pref('economical')
       
       if steps < 10000:
          power_demand_0 += info['total_power_demand']

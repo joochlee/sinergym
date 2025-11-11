@@ -52,7 +52,7 @@ import torch
 PREFERENCE_MAP = {
    "economical": {
       "vec": np.array([1.0, 0.0, 0.0]),
-      "reward_weight": 0.7  # (에너지, 쾌적도)
+      "reward_weight": 0.8  # (에너지, 쾌적도)
    },
    "balanced": {
       "vec": np.array([0.0, 1.0, 0.0]),
@@ -60,7 +60,7 @@ PREFERENCE_MAP = {
    },
    "comfort": {
       "vec": np.array([0.0, 0.0, 1.0]),
-      "reward_weight": 0.3
+      "reward_weight": 0.2
    }
 }
 
@@ -95,8 +95,15 @@ class PreferenceWrapper(gym.Wrapper):
       return obs, info
 
    def step(self, action):
-      obs, reward, done, truncated, info = self.env.step(action)
+      # 한 에피소드가 진행될때도 랜덤하게 "선호도"를 변경해서 학습함
+      self.preference_type = choice(list(PREFERENCE_MAP))
+      self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
+      self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
+      # energy weight를 선호도에 맞게 업데이트
+      self.unwrapped.reward_fn.W_energy = self.w_energy
 
+      obs, reward, done, truncated, info = self.env.step(action)
+     
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
       # energy = info.get('electricity_demand', 0.0)
@@ -141,9 +148,12 @@ logger = terminal_logger.getLogger(
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
 episodes = 900  # 훈련 에피소드 수
 
+# extraname
+extra_name = 'with-random-pref'
+
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
-experiment_name = 'SB3_PPO-' + environment + \
+experiment_name = 'SB3_PPO-' + environment + '-' + extra_name + \
    '-episodes-' + str(episodes)
 experiment_name += '_' + experiment_date
 
@@ -163,10 +173,10 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
 env = NormalizeAction(env)  # 액션 정규화
 env = NormalizeObservation(env)  # 관찰값 정규화
+env = PreferenceWrapper(env)  # 선호도
 env = LoggerWrapper(env)  # 로깅 래퍼
 env = CSVLogger(env)  # CSV 로깅
 env = Monitor(env)  # 모니터링
-env = PreferenceWrapper(env)  # 선호도
 
 # 평가 환경에 래퍼 적용
 eval_env = TransformAction(eval_env, transform_action, eval_env.action_space)
@@ -183,7 +193,7 @@ eval_env = Monitor(eval_env)
 class SinergymTBCallback(BaseCallback):
    def __init__(self, verbose=0):
       super().__init__(verbose)
-      self.ep_rewards = deque(maxlen=10)  # 최근 100개 에피소드 보상 저장
+      self.ep_rewards = deque(maxlen=10)  # 최근 10개 에피소드 보상 저장
       self.step_count = 0  # 콜백 호출 횟수 추적
 
       # self._energy_buffer = []  # 에너지 버퍼 (현재 사용하지 않음)
@@ -229,6 +239,9 @@ class SinergymTBCallback(BaseCallback):
       reward_value = info.get('reward', 0.0)
       self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
       
+      reward_value = info.get('reward_weight', 0.0)
+      self.writer.add_scalar("perf/reward_weight", reward_value, self.num_timesteps)
+      
       # TensorBoard에 현재 스텝의 total power demand 기록 (카테고리: energy/total_power_demand, 값: power demand, x축: timesteps)
       total_power_demand_value = info.get('total_power_demand', 0.0)
       self.ep_total_power_demand.append(total_power_demand_value)
@@ -273,7 +286,7 @@ class SinergymTBCallback(BaseCallback):
                ep_length = info["episode"]["l"]  # 에피소드 길이
                self.ep_rewards.append(ep_r)
 
-               # EP Reward의 rolling 평균 계산 (최근 100개 에피소드)
+               # EP Reward의 rolling 평균 계산 (최근 10개 에피소드)
                mean_r = sum(self.ep_rewards) / len(self.ep_rewards)
                print(f'\n🎯 EPISODE COMPLETED! 🎯')
                print(f'Episode #{len(self.ep_rewards)}: Reward = {ep_r:.2f}, Length = {ep_length}')
@@ -288,19 +301,19 @@ class SinergymTBCallback(BaseCallback):
                self.ep_mean_total_power_demand_rolling.append(ep_total_power_demand_sum)
                self.ep_total_power_demand = []  # 다음 에피소드를 위해 초기화
                
-               # Rolling 평균 계산 (최근 100개 에피소드)
+               # Rolling 평균 계산 (최근 10개 에피소드)
                if len(self.ep_mean_total_power_demand_rolling) > 0:
                   rolling_mean = sum(self.ep_mean_total_power_demand_rolling) / len(self.ep_mean_total_power_demand_rolling)
                   self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", rolling_mean, self.num_timesteps)
                   self.writer.add_scalar("perf/ep_total_power_demand", ep_total_power_demand_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
 
-               # EP Total Temperature Violation의 rolling 평균 계산 (최근 100개 에피소드)
+               # EP Total Temperature Violation의 rolling 평균 계산 (최근 10개 에피소드)
                # 에피소드당 총 temperature violation 합계를 저장 (에피소드 평균이 아니라 합계)
                ep_total_temperature_violation_sum = sum(self.ep_total_temperature_violation) if self.ep_total_temperature_violation else 0.0
                self.ep_mean_total_temperature_violation_rolling.append(ep_total_temperature_violation_sum)
                self.ep_total_temperature_violation = []  # 다음 에피소드를 위해 초기화
                
-               # Rolling 평균 계산 (최근 100개 에피소드)
+               # Rolling 평균 계산 (최근 10개 에피소드)
                if len(self.ep_mean_total_temperature_violation_rolling) > 0:
                   rolling_mean = sum(self.ep_mean_total_temperature_violation_rolling) / len(self.ep_mean_total_temperature_violation_rolling)
                   self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
@@ -475,7 +488,8 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_dymanic_preference')  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo_' + extra_name)  # TensorBoard 로그 이름
+   # tb_log_name='cav_ppo_dymanic_preference_reorder_wrapper')  # TensorBoard 로그 이름
 
 
 # -----------------------------------------------------------------------------
