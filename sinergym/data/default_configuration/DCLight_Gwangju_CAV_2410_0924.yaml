@@ -52,89 +52,11 @@ time_variables:
 
 # ----------------------------- OUTPUT:VARIABLES ----------------------------- #
 variables:
-  # 조명전력소모량
+  # 현재 조명 소모 전력
   Lights Electricity Rate:
     variable_names: lights_electricity_rate
     keys:
       - CORE_ZN_LIGHTS
-      - PERIMETER_ZN_1_LIGHTS
-      - PERIMETER_ZN_2_LIGHTS
-      - PERIMETER_ZN_3_LIGHTS
-      - PERIMETER_ZN_4_LIGHTS
-
-  # 존, 온도, 습도, CO2
-  Zone Mean Air temperature:
-    variable_names: mean_air_temperature
-    keys:
-      - ATTIC
-      - CORE_ZN
-      - PERIMETER_ZN_1
-      - PERIMETER_ZN_2
-      - PERIMETER_ZN_3
-      - PERIMETER_ZN_4
-  Zone Air Relative Humidity:
-    variable_names: air_relative_humidity
-    keys: 
-      - ATTIC
-      - CORE_ZN
-      - PERIMETER_ZN_1
-      - PERIMETER_ZN_2
-      - PERIMETER_ZN_3
-      - PERIMETER_ZN_4
-  Zone Air CO2 Concentration:
-    variable_names: air_co2_concentration
-    keys:
-      - ATTIC
-      - CORE_ZN
-      - PERIMETER_ZN_1
-      - PERIMETER_ZN_2
-      - PERIMETER_ZN_3
-      - PERIMETER_ZN_4
-  # 외부 기상 조건
-  Site Outdoor Air Drybulb temperature:
-    variable_names: outdoor_air_drybulb_temperature
-    keys: Environment
-  Site Outdoor Air Relative Humidity:
-    variable_names: outdoor_air_relative_humidity
-    keys: Environment
-  Site Direct Solar Radiation Rate per Area:
-    variable_names: direct_solar_radiation_rate_per_area
-    keys: Environment
-  Site Wind Speed:
-    variable_names: wind_speed
-    keys: Environment
-  # 재실자 수 및 스케줄
-  Zone People Occupant Count:
-    variable_names: people_occupant_count
-    keys: 
-      - CORE_ZN
-      - PERIMETER_ZN_1
-      - PERIMETER_ZN_2
-      - PERIMETER_ZN_3
-      - PERIMETER_ZN_4
-  # 에너지 소비량 모니터링
-  Facility Total Electricity Demand Rate:
-    variable_names: total_electricity_demand_rate
-    keys: Whole Building
-  Air System Total Cooling Energy:
-    variable_names: air_system_total_cooling_energy
-    keys:
-      - PSZ-AC:1
-      - PSZ-AC:2
-      - PSZ-AC:3
-      - PSZ-AC:4
-      - PSZ-AC:5
-  Air System Total Heating Energy:
-    variable_names: air_system_total_cooling_energy
-    keys:
-      - PSZ-AC:1
-      - PSZ-AC:2
-      - PSZ-AC:3
-      - PSZ-AC:4
-      - PSZ-AC:5
-  # 실내쾌적도
-  # Zone Thermal Comfort Fanger Model PPD, 
-  # Zone Thermal Comfort Fanger Model PMV는 출력변수에 없음
 
 # ------------------------------- OUTPUT:METERS ------------------------------ #
 meters:
@@ -146,24 +68,11 @@ meters:
 
 # --------------------------- ACTUATORS TO CONTROL --------------------------- #
 actuators:
-  # CAV 각 존 온도 설정값
-  # 히팅 온도 스케줄
-  HTGSETP_SCH_NO_OPTIMUM:
-    variable_name: Heating_Setpoint_RL
+  # 조명 스케줄
+  ltg_sch_office:
+    variable_name: Lighting_Setpoint_RL
     element_type: Schedule:Compact
     value_type: Schedule Value
-  # 쿨링 온도 스케줄
-  CLGSETP_SCH_NO_OPTIMUM:
-    variable_name: Cooling_Setpoint_RL
-    element_type: Schedule:Compact
-    value_type: Schedule Value
-  
-  # CAV 시스템 On/Off
-  HVACOPERATIONSCHD:
-    variable_name: hvac_operation_RL
-    element_type: Schedule:Compact
-    value_type: Schedule Value
-  
 
 # ---------------------------------------------------------------------------- #
 #                   DYNAMIC CONTEXT CONFIGURABLE IN REAL-TIME                  #
@@ -173,42 +82,70 @@ context: {}
 # ---------------------------------------------------------------------------- #
 #                                 ACTIONS SPACE                                #
 # ---------------------------------------------------------------------------- #
-action_space: gym.spaces.Box(low=np.array([12.0, 23.25, 0.0], dtype=np.float32), high=np.array([23.25, 30.0, 1.0], dtype=np.float32), shape=(3,), dtype=np.float32)
+# action_space: gym.spaces.Box(low=np.array([12.0, 23.25, 0.0], dtype=np.float32), high=np.array([23.25, 30.0, 1.0], dtype=np.float32), shape=(3,), dtype=np.float32)
+action_space: gym.spaces.Box(low=np.array([0.0], dtype=np.float32), high=np.array([1.0], dtype=np.float32), shape=(1,), dtype=np.float32)
 
 # action_space_discrete: gym.spaces.Discrete(10)
 
 # ---------------------------------------------------------------------------- #
 #                                REWARD FUNCTION                               #
 # ---------------------------------------------------------------------------- #
-reward: sinergym.utils.rewards:LinearReward
+reward: sinergym.utils.rewards:LinearReward4Light
 
 reward_kwargs:
-  temperature_variables:
-    - attic_mean_air_temperature
-    - core_zn_mean_air_temperature
-    - perimeter_zn_1_mean_air_temperature
-    - perimeter_zn_2_mean_air_temperature
-    - perimeter_zn_3_mean_air_temperature
-    - perimeter_zn_4_mean_air_temperature
+  # temperature_variables:
+  #   - attic_mean_air_temperature
+  #   - core_zn_mean_air_temperature
+  #   - perimeter_zn_1_mean_air_temperature
+  #   - perimeter_zn_2_mean_air_temperature
+  #   - perimeter_zn_3_mean_air_temperature
+  #   - perimeter_zn_4_mean_air_temperature
+  
   energy_variables:
-    - total_electricity_demand_rate
-  range_comfort_winter:
-    - 20.0
-    - 23.5
-  range_comfort_summer:
-    - 23.0
-    - 26.0
-  summer_start:
-    - 6
-    - 1
-  summer_final:
-    - 9
-    - 30
-  # 1. 전력소모 == 열쾌적성
-  energy_weight: 0.5
+    - core_zn_lights_lights_electricity_rate
+    # - total_electricity_demand_rate
+  
+  # range_comfort_winter:
+  #   - 20.0
+  #   - 23.5
+  # range_comfort_summer:
+  #   - 23.0
+  #   - 26.0
+  # summer_start:
+  #   - 6
+  #   - 1
+  # summer_final:
+  #   - 9
+  #   - 30
+
+  # 조명밝기 하한선
+  min_dim: 0.7
+
+  # ess 용량
+  ess_total: 300000.0
+
+  # 최소 SoC
+  min_soc : 0.1
+
+  # ESS 사용 가중치
+  ess_weight: 0.3
+
+  # grid 사용 가중치
+  grid_weight: 0.3
+
+  # 최소 dimming 가중치
+  dim_weight: 0.4
+
+  # 내부변수 "Lighting Power Design Level"의 설정값.
+  # 이 값은 lights 객체의 Lighting Level 속성값에 해당함
+  # 원래는 python api를 통해서 내부변수의 값을 읽어와야 하나 일단 급해서 여기에 값을 적어둠 (2025-11-13)
+  lighting_power_design_level : 1000.0
+
   # 2. 전력소모에 더 중점
   # energy_weight: 0.7
   # 3. 열쾌적성에 더 중점
   # energy_weight: 0.3
+  
+  
   lambda_energy: 1.0e-4
   lambda_temperature: 1.0

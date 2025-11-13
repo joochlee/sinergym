@@ -7637,8 +7637,8 @@ Lights,
     Core_ZN_Lights,          !- Name
     Core_ZN,                 !- Zone or ZoneList or Space or SpaceList Name
     ltg_sch_office,          !- Schedule Name
-    Watts/Area,              !- Design Level Calculation Method
-    ,                        !- Lighting Level {W}
+    LightingLevel,              !- Design Level Calculation Method
+    1000,                        !- Lighting Level {W}
     10.67131,                !- Watts per Floor Area {W/m2}
     ,                        !- Watts per Person {W/person}
     0.0000,                  !- Return Air Fraction
@@ -7652,8 +7652,8 @@ Lights,
     Perimeter_ZN_1_Lights,   !- Name
     Perimeter_ZN_1,          !- Zone or ZoneList or Space or SpaceList Name
     ltg_sch_office,          !- Schedule Name
-    Watts/Area,              !- Design Level Calculation Method
-    ,                        !- Lighting Level {W}
+    LightingLevel,              !- Design Level Calculation Method
+    1000,                        !- Lighting Level {W}
     10.67131,                !- Watts per Floor Area {W/m2}
     ,                        !- Watts per Person {W/person}
     0.0000,                  !- Return Air Fraction
@@ -7667,8 +7667,8 @@ Lights,
     Perimeter_ZN_2_Lights,   !- Name
     Perimeter_ZN_2,          !- Zone or ZoneList or Space or SpaceList Name
     ltg_sch_office,          !- Schedule Name
-    Watts/Area,              !- Design Level Calculation Method
-    ,                        !- Lighting Level {W}
+    LightingLevel,              !- Design Level Calculation Method
+    1000,                        !- Lighting Level {W}
     10.67131,                !- Watts per Floor Area {W/m2}
     ,                        !- Watts per Person {W/person}
     0.0000,                  !- Return Air Fraction
@@ -7682,8 +7682,8 @@ Lights,
     Perimeter_ZN_3_Lights,   !- Name
     Perimeter_ZN_3,          !- Zone or ZoneList or Space or SpaceList Name
     ltg_sch_office,          !- Schedule Name
-    Watts/Area,              !- Design Level Calculation Method
-    ,                        !- Lighting Level {W}
+    LightingLevel,              !- Design Level Calculation Method
+    1000,                        !- Lighting Level {W}
     10.67131,                !- Watts per Floor Area {W/m2}
     ,                        !- Watts per Person {W/person}
     0.0000,                  !- Return Air Fraction
@@ -7697,8 +7697,8 @@ Lights,
     Perimeter_ZN_4_Lights,   !- Name
     Perimeter_ZN_4,          !- Zone or ZoneList or Space or SpaceList Name
     ltg_sch_office,          !- Schedule Name
-    Watts/Area,              !- Design Level Calculation Method
-    ,                        !- Lighting Level {W}
+    LightingLevel,              !- Design Level Calculation Method
+    1000,                        !- Lighting Level {W}
     10.67131,                !- Watts per Floor Area {W/m2}
     ,                        !- Watts per Person {W/person}
     0.0000,                  !- Return Air Fraction

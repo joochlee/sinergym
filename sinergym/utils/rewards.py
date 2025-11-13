@@ -184,6 +184,221 @@ class LinearReward(BaseReward):
         return reward, energy_term, comfort_term
 
 
+# by jclee (2025-11-12)
+class LinearReward4Light(BaseReward):
+
+    def __init__(
+        self,
+        # temperature_variables: List[str],
+        energy_variables: List[str],
+        # range_comfort_winter: Tuple[float, float],
+        # range_comfort_summer: Tuple[float, float],
+        # summer_start: Tuple[int, int] = (6, 1),
+        # summer_final: Tuple[int, int] = (9, 30),
+        # energy_weight: float = 0.5,
+        min_dim : float = 0.7,
+        ess_total : float = 300000,
+        min_soc : float = 0.1,
+        ess_weight : float = 0.3,
+        grid_weight : float = 0.3,
+        dim_weight : float = 0.4,
+        lighting_power_design_level : float = 1000.0,
+        lambda_energy: float = 1.0,
+        lambda_temperature: float = 1.0
+    ):
+        """
+        Linear reward function.
+
+        It considers the energy consumption and the absolute difference to temperature comfort.
+
+        .. math::
+            R = - W * lambda_E * power - (1 - W) * lambda_T * (max(T - T_{low}, 0) + max(T_{up} - T, 0))
+
+        Args:
+            temperature_variables (List[str]): Name(s) of the temperature variable(s).
+            energy_variables (List[str]): Name(s) of the energy/power variable(s).
+            range_comfort_winter (Tuple[float,float]): Temperature comfort range for cold season. Depends on environment you are using.
+            range_comfort_summer (Tuple[float,float]): Temperature comfort range for hot season. Depends on environment you are using.
+            summer_start (Tuple[int,int]): Summer session tuple with month and day start. Defaults to (6,1).
+            summer_final (Tuple[int,int]): Summer session tuple with month and day end. defaults to (9,30).
+            energy_weight (float, optional): Weight given to the energy term. Defaults to 0.5.
+            lambda_energy (float, optional): Constant for removing dimensions from power(1/W). Defaults to 1e-4.
+            lambda_temperature (float, optional): Constant for removing dimensions from temperature(1/C). Defaults to 1.0.
+        """
+
+        super().__init__()
+
+        # Basic validations
+        if not (0 <= ess_weight + grid_weight <= 1):
+            self.logger.error(
+                f'sum of all weights must be between 0 and 1. Received: ess_weight : {ess_weight}, grid_weight: {grid_weight}')
+            raise ValueError
+        if not all(isinstance(v, str)
+                   for v in energy_variables):
+            self.logger.error('All variable names must be strings.')
+            raise TypeError
+
+        # Name of the variables
+        # self.temp_names = temperature_variables
+        self.energy_names = energy_variables
+
+        # Reward parameters
+        # self.range_comfort_winter = range_comfort_winter
+        # self.range_comfort_summer = range_comfort_summer
+        # self.W_energy = energy_weight
+
+        self.min_dim = min_dim
+        self.ess_total = ess_total
+        self.min_soc = min_soc
+        self.W_ess = ess_weight
+        self.W_grid = grid_weight
+        self.W_dim = dim_weight
+        self.lighting_power_design_level = lighting_power_design_level
+
+        self.lambda_energy = lambda_energy
+        self.lambda_temp = lambda_temperature
+
+        # Summer period
+        # self.summer_start = summer_start  # (month, day)
+        # self.summer_final = summer_final  # (month, day)
+
+        self.logger.info('Reward function initialized.')
+
+    def __call__(self, obs_dict: Dict[str, Any]
+                 ) -> Tuple[float, Dict[str, Any]]:
+        """Calculate the reward function value based on observation data.
+
+        Args:
+            obs_dict (Dict[str, Any]): Dict with observation variable name (key) and observation variable value (value)
+
+        Returns:
+            Tuple[float, Dict[str, Any]]: Reward value and dictionary with their individual components.
+        """
+
+        # Energy calculation
+        # lights_electricity_rate 값 저장
+        energy_values = self._get_energy_consumed(obs_dict)
+        self.total_energy = sum(energy_values)
+        self.energy_penalty = self.total_energy
+
+        # 조명 최소밝기 violation 계산
+        dim_violations = self._get_dim_violation(obs_dict)
+        self.total_dim_violation = sum(dim_violations)
+        self.dim_penalty = -self.total_dim_violation
+
+        # Comfort violation calculation
+        # temp_violations = self._get_temperature_violation(obs_dict)
+        # self.total_temp_violation = sum(temp_violations)
+        # self.comfort_penalty = -self.total_temp_violation
+
+        # Weighted sum of both terms
+        # reward, energy_term, comfort_term = self._get_reward()
+        reward, ess_term, dim_term = self._get_reward()
+
+        reward_terms = {
+            'ess_term': ess_term,
+            'dim_term' : dim_term,
+            'min_soc' : self.min_soc,
+            # 'grid_term': grid_term,
+            'energy_penalty': self.energy_penalty,
+            'dim_penalty': self.dim_penalty,
+            # 'comfort_penalty': self.comfort_penalty,
+            'total_power_demand': self.total_energy,
+            'dim_level' : self.total_energy/self.lighting_power_design_level,
+            'lambda_energy' : self.lambda_energy,
+            # 'total_temperature_violation': self.total_temp_violation,
+            # 'reward_weight': self.W_energy
+            'ess_weight' : self.W_ess,
+            'grid_weight' : self.W_grid,
+            'ess_weight' : self.W_ess
+        }
+
+        return reward, reward_terms
+
+    def _get_energy_consumed(self, obs_dict: Dict[str,
+                                                  Any]) -> List[float]:
+        """Calculate the energy consumed in the current observation.
+
+        Args:
+            obs_dict (Dict[str, Any]): Environment observation.
+
+        Returns:
+            List[float]: List with energy consumed in each energy variable.
+        """
+        return [obs_dict[v] for v in self.energy_names]
+
+
+    def _get_dim_violation(
+            self, obs_dict: Dict[str, Any]) -> List[float]:
+        """조명의 현재 밝기와 최소밝기와의 오차를 계산, 최소보다 밝으면 0 리턴
+
+        Args:
+            obs_dict (Dict[str, Any]): EP의 출력변수 사전 (str: key 값)
+
+        Returns:
+            List[float]: dim violation 값들의 리스트
+        """
+        energy_values = [obs_dict[v] for v in self.energy_names]
+
+        return [max(0.0, self.min_dim - E/self.lighting_power_design_level)
+                for E in energy_values]
+
+
+    # def _get_temperature_violation(
+    #         self, obs_dict: Dict[str, Any]) -> List[float]:
+    #     """Calculate the temperature violation (ºC) in each observation's temperature variable.
+
+    #     Returns:
+    #         List[float]: List with temperature violation in each zone.
+    #     """
+
+    #     # Current datetime and summer period
+    #     current_dt = datetime(
+    #         YEAR, int(
+    #             obs_dict['month']), int(
+    #             obs_dict['day_of_month']))
+    #     summer_start_date = datetime(YEAR, *self.summer_start)
+    #     summer_final_date = datetime(YEAR, *self.summer_final)
+
+    #     temp_range = self.range_comfort_summer if \
+    #         summer_start_date <= current_dt <= summer_final_date else \
+    #         self.range_comfort_winter
+
+    #     temp_values = [obs_dict[v] for v in self.temp_names]
+
+    #     return [max(temp_range[0] - T, 0, T - temp_range[1])
+    #             for T in temp_values]
+
+    def _get_reward(self) -> Tuple[float, ...]:
+        """
+        reward 중 EP로부터 얻을 수 있는 출력변수의 값을 참고하여 일부만 계산해서 리턴함.
+        일부 : ess_term, dim_term
+
+        reward 공식 : 
+            reward = ess_weight * p_light_elec_rate - dim_weight * max(0, min_dim - cur_dim) - grid_weight * grid_usage
+            (cur_dim 은 조명 스케줄의 fraction 값임)
+
+        Args:
+            energy_penalty (float): Negative absolute energy penalty value.
+            comfort_penalty (float): Negative absolute comfort penalty value.
+
+        Returns:
+            Tuple[float, ...]: 부분 reward 및 계산된 term 들.
+        """
+        ess_term = self.lambda_energy * self.W_ess * self.energy_penalty
+        dim_term = self.W_dim * self.dim_penalty
+        
+        reward = ess_term + dim_term
+        return reward, ess_term, dim_term
+
+        # energy_term = self.lambda_energy * self.W_energy * self.energy_penalty
+        # comfort_term = self.lambda_temp * \
+        #     (1 - self.W_energy) * self.comfort_penalty
+        
+        # reward = energy_term + comfort_term
+        # return reward, energy_term, comfort_term
+
+
 class EnergyCostLinearReward(LinearReward):
 
     def __init__(

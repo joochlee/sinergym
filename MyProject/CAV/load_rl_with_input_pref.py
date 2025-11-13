@@ -264,7 +264,8 @@ device = 'cpu'
 
 # MODEL_PATH = './trained_model/model_ew_0.7.zip'
 # MODEL_PATH = './trained_model/model_ew_0.3.zip'
-MODEL_PATH = './trained_model/model_dynamic_pref.zip'
+# MODEL_PATH = './trained_model/model_dynamic_pref_11.11.zip'
+MODEL_PATH = './trained_model/model_dynamic_pref_11.12.zip'
 LOG_DIR = './tb_logs/evaluation'
 
 # save된 학습모델 로딩
@@ -346,39 +347,38 @@ for episode in range(episodes):
       #    # pref_env.set_pref('comfort')
       #    pref_env.set_pref('economical')
       
-      # env.set_pref('economical')
-      
-      if steps < 10000:
-         power_demand_0 += info['total_power_demand']
-      else:
-         power_demand_1 += info['total_power_demand']
+      # if steps < 10000:
+      #    power_demand_0 += info['total_power_demand']
+      # else:
+      #    power_demand_1 += info['total_power_demand']
 
       # -----------------------------------------
 
 
-      # if steps == 10000:
+      if steps == 8600:
+         env.set_pref('economical')
+         # env.set_pref('comfort')
+      # elif steps == 14000:
       #    env.set_pref('comfort')
-      # elif steps == 45000:
-      #    env.set_pref('economical')
 
-      # if steps < 10000:
+      # if steps < 8600:
       #    power_demand_0 += info['total_power_demand']
-      # elif steps < 45000:
+      # elif steps < 14000:
       #    power_demand_1 += info['total_power_demand']
       # else:
       #    power_demand_2 += info['total_power_demand']
 
       # -----------------------------------------
 
-      # if not (steps % 17500):
-      #    if steps / 17500 == 1:
+      # if not (steps % 8600):
+      #    if steps / 8600 == 1:
       #       env.set_pref('economical')
-      #    elif steps / 17500 == 2:
+      #    elif steps / 8600 == 2:
       #       env.set_pref('comfort')
 
-      # if steps < 17500:
+      # if steps < 8600:
       #    power_demand_0 += info['total_power_demand']
-      # elif steps < 35000:
+      # elif steps < 17200:
       #    power_demand_1 += info['total_power_demand']
       # else:
       #    power_demand_2 += info['total_power_demand']

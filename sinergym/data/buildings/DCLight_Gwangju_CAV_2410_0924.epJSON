@@ -3440,11 +3440,12 @@
     },
     "Lights": {
         "Core_ZN_Lights": {
-            "design_level_calculation_method": "Watts/Area",
+            "design_level_calculation_method": "LightingLevel",
             "end_use_subcategory": "LightsWired",
             "fraction_radiant": 0.7,
             "fraction_replaceable": 1.0,
             "fraction_visible": 0.2,
+            "lighting_level": 1000,
             "return_air_fraction": 0.0,
             "return_air_fraction_calculated_from_plenum_temperature": "No",
             "schedule_name": "ltg_sch_office",
@@ -3452,11 +3453,12 @@
             "zone_or_zonelist_or_space_or_spacelist_name": "Core_ZN"
         },
         "Perimeter_ZN_1_Lights": {
-            "design_level_calculation_method": "Watts/Area",
+            "design_level_calculation_method": "LightingLevel",
             "end_use_subcategory": "LightsWired",
             "fraction_radiant": 0.7,
             "fraction_replaceable": 1.0,
             "fraction_visible": 0.2,
+            "lighting_level": 1000,
             "return_air_fraction": 0.0,
             "return_air_fraction_calculated_from_plenum_temperature": "No",
             "schedule_name": "ltg_sch_office",
@@ -3464,11 +3466,12 @@
             "zone_or_zonelist_or_space_or_spacelist_name": "Perimeter_ZN_1"
         },
         "Perimeter_ZN_2_Lights": {
-            "design_level_calculation_method": "Watts/Area",
+            "design_level_calculation_method": "LightingLevel",
             "end_use_subcategory": "LightsWired",
             "fraction_radiant": 0.7,
             "fraction_replaceable": 1.0,
             "fraction_visible": 0.2,
+            "lighting_level": 1000,
             "return_air_fraction": 0.0,
             "return_air_fraction_calculated_from_plenum_temperature": "No",
             "schedule_name": "ltg_sch_office",
@@ -3476,11 +3479,12 @@
             "zone_or_zonelist_or_space_or_spacelist_name": "Perimeter_ZN_2"
         },
         "Perimeter_ZN_3_Lights": {
-            "design_level_calculation_method": "Watts/Area",
+            "design_level_calculation_method": "LightingLevel",
             "end_use_subcategory": "LightsWired",
             "fraction_radiant": 0.7,
             "fraction_replaceable": 1.0,
             "fraction_visible": 0.2,
+            "lighting_level": 1000,
             "return_air_fraction": 0.0,
             "return_air_fraction_calculated_from_plenum_temperature": "No",
             "schedule_name": "ltg_sch_office",
@@ -3488,11 +3492,12 @@
             "zone_or_zonelist_or_space_or_spacelist_name": "Perimeter_ZN_3"
         },
         "Perimeter_ZN_4_Lights": {
-            "design_level_calculation_method": "Watts/Area",
+            "design_level_calculation_method": "LightingLevel",
             "end_use_subcategory": "LightsWired",
             "fraction_radiant": 0.7,
             "fraction_replaceable": 1.0,
             "fraction_visible": 0.2,
+            "lighting_level": 1000,
             "return_air_fraction": 0.0,
             "return_air_fraction_calculated_from_plenum_temperature": "No",
             "schedule_name": "ltg_sch_office",

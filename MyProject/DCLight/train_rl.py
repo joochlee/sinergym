@@ -24,10 +24,7 @@ from sinergym.utils.logger import WandBOutputFormat
 from sinergym.utils.rewards import *
 from sinergym.utils.wrappers import *
 
-from random import choice
-# from sinergym.utils.wrappers import NormalizeObservation
-
-
+import random
 
 from datetime import datetime
 
@@ -37,93 +34,10 @@ from stable_baselines3.common.logger import HumanOutputFormat
 from stable_baselines3.common.logger import Logger as SB3Logger
 from stable_baselines3.common.monitor import Monitor
 
-
-from stable_baselines3.common.env_util import make_vec_env
-
-
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
-
-# -----------------------------------------------------------------------------
-# 사용자 선호도 추가용 wrapper
-# ----------------------------------------------------------------------------- 
-# 사용자 선호 정의 (벡터 + 가중치)
-PREFERENCE_MAP = {
-   "economical": {
-      "vec": np.array([1.0, 0.0, 0.0]),
-      "reward_weight": 0.8  # (에너지, 쾌적도)
-   },
-   "balanced": {
-      "vec": np.array([0.0, 1.0, 0.0]),
-      "reward_weight": 0.5
-   },
-   "comfort": {
-      "vec": np.array([0.0, 0.0, 1.0]),
-      "reward_weight": 0.2
-   }
-}
-
-class PreferenceWrapper(gym.Wrapper):
-   def __init__(self, env, preference_type="balanced"):
-      super().__init__(env)
-      assert preference_type in PREFERENCE_MAP
-
-      self.preference_type = preference_type
-      self.preference_vec = PREFERENCE_MAP[preference_type]["vec"]
-      self.w_energy = PREFERENCE_MAP[preference_type]["reward_weight"]
-
-      # 상태 공간 확장
-      orig_obs_space = self.observation_space
-      self.observation_space = spaces.Box(
-         low=np.concatenate([orig_obs_space.low, np.zeros_like(self.preference_vec)]),
-         high=np.concatenate([orig_obs_space.high, np.ones_like(self.preference_vec)]),
-         dtype=np.float64
-      )
-
-   def reset(self, **kwargs):
-      obs, info = self.env.reset(**kwargs)
-      # 한 에피소드가 끝나면 "선호도"를 랜덤값으로 변경해서 다시 학습함
-      self.preference_type = choice(list(PREFERENCE_MAP))
-      self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
-      self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
-      # energy weight를 선호도에 맞게 업데이트
-      self.unwrapped.reward_fn.W_energy = self.w_energy
-
-      # 변경된 "선호도"를 상태에 업데이트함
-      obs = np.concatenate([obs, self.preference_vec])
-      return obs, info
-
-   def step(self, action):
-      # 한 에피소드가 진행될때도 랜덤하게 "선호도"를 변경해서 학습함
-      self.preference_type = choice(list(PREFERENCE_MAP))
-      self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
-      self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
-      # energy weight를 선호도에 맞게 업데이트
-      self.unwrapped.reward_fn.W_energy = self.w_energy
-
-      obs, reward, done, truncated, info = self.env.step(action)
-     
-      # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
-      # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
-      # energy = info.get('electricity_demand', 0.0)
-      # discomfort = info.get('comfort_penalty', 0.0)
-
-      # shaped_reward = - (self.w_energy * energy + self.w_discomfort * discomfort)
-
-      obs = np.concatenate([obs, self.preference_vec])
-      return obs, reward, done, truncated, info
-
-
-
-def make_env_with_random_preference(env_id="Eplus-office-small-continuous-v1"):
-    def _init():
-        base_env = gym.make(env_id)
-        normed_env = NormalizeObservation(base_env)  # 관측 정규화
-        pref_type = choice(["economical", "balanced", "comfort"])
-        return PreferenceWrapper(normed_env, preference_type=pref_type)
-    return _init
-
+# =============================================================================
 
 def transform_action(action):
    """
@@ -137,6 +51,80 @@ def transform_action(action):
    return np.array([continuous1, continuous2, discrete], dtype=np.float32)
 
 
+# =============================================================================
+
+
+class ObsRewardWrapper(gym.Wrapper):
+   def __init__(self, env):
+      super().__init__(env)
+      # assert preference_type in PREFERENCE_MAP
+
+      # self.preference_type = preference_type
+      # self.preference_vec = PREFERENCE_MAP[preference_type]["vec"]
+      # self.w_energy = PREFERENCE_MAP[preference_type]["reward_weight"]
+
+      # 상태 공간 확장 : 
+      # - 기존 : (lights_electricity_rate)
+      # - 확장 : (lights_electricity_rate, ess_soc, grid_usage, dim_level)
+      orig_obs_space = self.observation_space
+
+      print(f'\n===> orig_obs_space \n{orig_obs_space}\n')
+
+      self.observation_space = spaces.Box(
+         low=np.concatenate([orig_obs_space.low, [0.0, 0.0, 0.0]]),
+         high=np.concatenate([orig_obs_space.high, [1.0, 20000.0, 1.0]]),
+         dtype=np.float64
+      )
+
+   def reset(self, **kwargs):
+      obs, info = self.env.reset(**kwargs)
+      # # 한 에피소드가 끝나면 "선호도"를 랜덤값으로 변경해서 다시 학습함
+      # self.preference_type = choice(list(PREFERENCE_MAP))
+      # self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
+      # self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
+      # # energy weight를 선호도에 맞게 업데이트
+      # self.unwrapped.reward_fn.W_energy = self.w_energy
+
+      # 변경된 "선호도"를 상태에 업데이트함
+      obs = np.concatenate([obs, [1.0, 0.0, 0.0]])
+      return obs, info
+
+   def step(self, action):
+      # # 한 에피소드가 진행될때도 랜덤하게 "선호도"를 변경해서 학습함
+      # self.preference_type = choice(list(PREFERENCE_MAP))
+      # self.preference_vec = PREFERENCE_MAP[self.preference_type]['vec']
+      # self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
+      # # energy weight를 선호도에 맞게 업데이트
+      # self.unwrapped.reward_fn.W_energy = self.w_energy
+
+      obs, reward, done, truncated, info = self.env.step(action)
+     
+      # print(f'\n===> before obs \n{obs}\n')
+      # print(f'\n===> before reward \n{reward}\n')
+
+      ess_soc = random.uniform(0.0, 1.0)
+      grid_usage = random.uniform(0.0, 20000.0)
+      dim_level = info['dim_level']
+
+      shaped_reward = reward - info['ess_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
+
+      # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
+      # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
+      # energy = info.get('electricity_demand', 0.0)
+      # discomfort = info.get('comfort_penalty', 0.0)
+
+      # shaped_reward = - (self.w_energy * energy + self.w_discomfort * discomfort)
+
+      obs = np.concatenate([obs, [ess_soc, grid_usage, dim_level]])
+
+      # print(f'\n===> after obs \n{obs}\n')
+      
+      return obs, shaped_reward, done, truncated, info
+
+
+# =============================================================================
+
+
 # 로거 설정
 terminal_logger = TerminalLogger()
 logger = terminal_logger.getLogger(
@@ -145,15 +133,12 @@ logger = terminal_logger.getLogger(
 )
 
 # 환경 설정
-environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 1200  # 훈련 에피소드 수
-
-# extraname
-extra_name = 'with-random-pref'
+environment = 'Eplus-DCLight-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
+episodes = 100  # 훈련 에피소드 수
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
-experiment_name = 'SB3_PPO-' + environment + '-' + extra_name + \
+experiment_name = 'SB3_PPO-' + environment + \
    '-episodes-' + str(episodes)
 experiment_name += '_' + experiment_date
 
@@ -170,39 +155,34 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 # env = gym.make('Eplus-CompassCAV-normal-continuous-stochastic-v1')
 
 # 훈련 환경에 래퍼 적용
-env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
+# env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
+env = ObsRewardWrapper(env)
 env = NormalizeAction(env)  # 액션 정규화
-env = NormalizeObservation(env)  # 관찰값 정규화
-env = PreferenceWrapper(env)  # 선호도
-env = LoggerWrapper(env)  # 로깅 래퍼
-env = CSVLogger(env)  # CSV 로깅
-env = Monitor(env)  # 모니터링
+# env = NormalizeObservation(env)  # 관찰값 정규화
+# env = LoggerWrapper(env)  # 로깅 래퍼
+# env = CSVLogger(env)  # CSV 로깅
+# env = Monitor(env)  # 모니터링
 
 # 평가 환경에 래퍼 적용
-eval_env = TransformAction(eval_env, transform_action, eval_env.action_space)
-eval_env = NormalizeObservation(eval_env)
+# eval_env = TransformAction(eval_env, transform_action, eval_env.action_space)
+# eval_env = NormalizeObservation(eval_env)
 eval_env = NormalizeAction(eval_env)
-eval_env = LoggerWrapper(eval_env)
-eval_env = CSVLogger(eval_env)
-eval_env = Monitor(eval_env)
+# eval_env = LoggerWrapper(eval_env)
+# eval_env = CSVLogger(eval_env)
+# eval_env = Monitor(eval_env)
 
 
-# -----------------------------------------------------------------------------
-# tensorboard 출력을 위한 콜백 클래스
-# ----------------------------------------------------------------------------- 
 class SinergymTBCallback(BaseCallback):
    def __init__(self, verbose=0):
       super().__init__(verbose)
-      self.ep_rewards = deque(maxlen=10)  # 최근 10개 에피소드 보상 저장
+      self.ep_rewards = deque(maxlen=10)  # 최근 100개 에피소드 보상 저장
       self.step_count = 0  # 콜백 호출 횟수 추적
 
-      # self._energy_buffer = []  # 에너지 버퍼 (현재 사용하지 않음)
+      # self.ep_total_power_demand = []
+      # self.ep_mean_total_power_demand_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
 
-      self.ep_total_power_demand = []
-      self.ep_mean_total_power_demand_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
-
-      self.ep_total_temperature_violation = []
-      self.ep_mean_total_temperature_violation_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
+      # self.ep_total_temperature_violation = []
+      # self.ep_mean_total_temperature_violation_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
 
    def _on_training_start(self) -> None:
       """훈련 시작 시 TensorBoard writer 초기화"""
@@ -235,38 +215,54 @@ class SinergymTBCallback(BaseCallback):
       info = infos_list[-1]
 
 
+      if "new_obs" in self.locals:
+         obs = self.locals["new_obs"]  # 현재 step의 관측값
+         # print("===> Current observation:", obs)
+         self.writer.add_scalar("perf/ess_soc", obs[0][-3], self.num_timesteps)
+
+
+
       # TensorBoard에 현재 스텝의 보상값을 기록 (카테고리: result/reward, 값: reward, x축: timesteps)
       reward_value = info.get('reward', 0.0)
       self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
       
-      reward_value = info.get('reward_weight', 0.0)
-      self.writer.add_scalar("perf/reward_weight", reward_value, self.num_timesteps)
-      
-      # TensorBoard에 현재 스텝의 total power demand 기록 (카테고리: energy/total_power_demand, 값: power demand, x축: timesteps)
+      ess_value = info.get('ess_term', 0.0)
+      self.writer.add_scalar("perf/ess_term", ess_value, self.num_timesteps)
+
+      dim_value = info.get('dim_term', 0.0)
+      self.writer.add_scalar("perf/dim_term", dim_value, self.num_timesteps)
+
+      dim_level_value = info.get('dim_level', 0.0)
+      self.writer.add_scalar("perf/dim_level", dim_level_value, self.num_timesteps)
+
       total_power_demand_value = info.get('total_power_demand', 0.0)
-      self.ep_total_power_demand.append(total_power_demand_value)
-      self.writer.add_scalar("energy/total_power_demand", total_power_demand_value, self.num_timesteps)
+      self.writer.add_scalar("perf/total_power_demand", total_power_demand_value, self.num_timesteps)
       
-      # energy term
-      energy_term_value = info.get('energy_term', 0.0)
-      self.writer.add_scalar("energy/energy_term", energy_term_value, self.num_timesteps)
+      # # TensorBoard에 현재 스텝의 total power demand 기록 (카테고리: energy/total_power_demand, 값: power demand, x축: timesteps)
+      # total_power_demand_value = info.get('total_power_demand', 0.0)
+      # self.ep_total_power_demand.append(total_power_demand_value)
+      # self.writer.add_scalar("energy/total_power_demand", total_power_demand_value, self.num_timesteps)
+      
+      # # energy term
+      # energy_term_value = info.get('energy_term', 0.0)
+      # self.writer.add_scalar("energy/energy_term", energy_term_value, self.num_timesteps)
 
-      # energy penalty
-      energy_penalty_value = info.get('energy_penalty', 0.0)
-      self.writer.add_scalar("energy/energy_penalty", energy_penalty_value, self.num_timesteps)
+      # # energy penalty
+      # energy_penalty_value = info.get('energy_penalty', 0.0)
+      # self.writer.add_scalar("energy/energy_penalty", energy_penalty_value, self.num_timesteps)
       
-      # total_temperature_violation
-      total_temperature_violation_value = info.get('total_temperature_violation', 0.0)
-      self.ep_total_temperature_violation.append(total_temperature_violation_value)
-      self.writer.add_scalar("comfort/total_temperature_violation", total_temperature_violation_value, self.num_timesteps)
+      # # total_temperature_violation
+      # total_temperature_violation_value = info.get('total_temperature_violation', 0.0)
+      # self.ep_total_temperature_violation.append(total_temperature_violation_value)
+      # self.writer.add_scalar("comfort/total_temperature_violation", total_temperature_violation_value, self.num_timesteps)
       
-      # comfort term
-      comfort_term_value = info.get('comfort_term', 0.0)
-      self.writer.add_scalar("comfort/comfort_term", comfort_term_value, self.num_timesteps)
+      # # comfort term
+      # comfort_term_value = info.get('comfort_term', 0.0)
+      # self.writer.add_scalar("comfort/comfort_term", comfort_term_value, self.num_timesteps)
 
-      # comfort penalty
-      comport_penalty_value = info.get('comfort_penalty', 0.0)
-      self.writer.add_scalar("comfort/comfort_penalty", comport_penalty_value, self.num_timesteps)
+      # # comfort penalty
+      # comport_penalty_value = info.get('comfort_penalty', 0.0)
+      # self.writer.add_scalar("comfort/comfort_penalty", comport_penalty_value, self.num_timesteps)
 
 
          
@@ -286,7 +282,7 @@ class SinergymTBCallback(BaseCallback):
                ep_length = info["episode"]["l"]  # 에피소드 길이
                self.ep_rewards.append(ep_r)
 
-               # EP Reward의 rolling 평균 계산 (최근 10개 에피소드)
+               # EP Reward의 rolling 평균 계산 (최근 100개 에피소드)
                mean_r = sum(self.ep_rewards) / len(self.ep_rewards)
                print(f'\n🎯 EPISODE COMPLETED! 🎯')
                print(f'Episode #{len(self.ep_rewards)}: Reward = {ep_r:.2f}, Length = {ep_length}')
@@ -295,66 +291,43 @@ class SinergymTBCallback(BaseCallback):
                print(f'Current Timestep: {self.num_timesteps}')
                self.writer.add_scalar("perf/ep_rew_mean_rolling", mean_r, self.num_timesteps)
 
-               # EP Total Power Demand의 rolling 평균 계산 (최근 100개 에피소드)
-               # 에피소드당 총 power demand 합계를 저장 (에피소드 평균이 아니라 합계)
-               ep_total_power_demand_sum = sum(self.ep_total_power_demand) if self.ep_total_power_demand else 0.0
-               self.ep_mean_total_power_demand_rolling.append(ep_total_power_demand_sum)
-               self.ep_total_power_demand = []  # 다음 에피소드를 위해 초기화
+               # # EP Total Power Demand의 rolling 평균 계산 (최근 100개 에피소드)
+               # # 에피소드당 총 power demand 합계를 저장 (에피소드 평균이 아니라 합계)
+               # ep_total_power_demand_sum = sum(self.ep_total_power_demand) if self.ep_total_power_demand else 0.0
+               # self.ep_mean_total_power_demand_rolling.append(ep_total_power_demand_sum)
+               # self.ep_total_power_demand = []  # 다음 에피소드를 위해 초기화
                
-               # Rolling 평균 계산 (최근 10개 에피소드)
-               if len(self.ep_mean_total_power_demand_rolling) > 0:
-                  rolling_mean = sum(self.ep_mean_total_power_demand_rolling) / len(self.ep_mean_total_power_demand_rolling)
-                  self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", rolling_mean, self.num_timesteps)
-                  self.writer.add_scalar("perf/ep_total_power_demand", ep_total_power_demand_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
+               # # Rolling 평균 계산 (최근 100개 에피소드)
+               # if len(self.ep_mean_total_power_demand_rolling) > 0:
+               #    rolling_mean = sum(self.ep_mean_total_power_demand_rolling) / len(self.ep_mean_total_power_demand_rolling)
+               #    self.writer.add_scalar("perf/ep_mean_total_power_demand_rolling", rolling_mean, self.num_timesteps)
+               #    self.writer.add_scalar("perf/ep_total_power_demand", ep_total_power_demand_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
 
-               # EP Total Temperature Violation의 rolling 평균 계산 (최근 10개 에피소드)
-               # 에피소드당 총 temperature violation 합계를 저장 (에피소드 평균이 아니라 합계)
-               ep_total_temperature_violation_sum = sum(self.ep_total_temperature_violation) if self.ep_total_temperature_violation else 0.0
-               self.ep_mean_total_temperature_violation_rolling.append(ep_total_temperature_violation_sum)
-               self.ep_total_temperature_violation = []  # 다음 에피소드를 위해 초기화
+               # # EP Total Temperature Violation의 rolling 평균 계산 (최근 100개 에피소드)
+               # # 에피소드당 총 temperature violation 합계를 저장 (에피소드 평균이 아니라 합계)
+               # ep_total_temperature_violation_sum = sum(self.ep_total_temperature_violation) if self.ep_total_temperature_violation else 0.0
+               # self.ep_mean_total_temperature_violation_rolling.append(ep_total_temperature_violation_sum)
+               # self.ep_total_temperature_violation = []  # 다음 에피소드를 위해 초기화
                
-               # Rolling 평균 계산 (최근 10개 에피소드)
-               if len(self.ep_mean_total_temperature_violation_rolling) > 0:
-                  rolling_mean = sum(self.ep_mean_total_temperature_violation_rolling) / len(self.ep_mean_total_temperature_violation_rolling)
-                  self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
-                  self.writer.add_scalar("perf/ep_total_temperature_violation", ep_total_temperature_violation_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
+               # # Rolling 평균 계산 (최근 100개 에피소드)
+               # if len(self.ep_mean_total_temperature_violation_rolling) > 0:
+               #    rolling_mean = sum(self.ep_mean_total_temperature_violation_rolling) / len(self.ep_mean_total_temperature_violation_rolling)
+               #    self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", rolling_mean, self.num_timesteps)
+               #    self.writer.add_scalar("perf/ep_total_temperature_violation", ep_total_temperature_violation_sum, self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
                
-               # episode 에서 사용한 reward_weight의 값을 로깅
-               self.writer.add_scalar("perf/ep_reward_weight", info.get('reward_weight', 0.0), self.num_timesteps)  # 현재 에피소드 값도 별도로 기록
-
-
-               # EP Total Temperature Violation 의 rolling 평균 계산 (최근 100개 에피소드)
-               # self.ep_mean_total_temperature_violation_rolling.append(sum(self.ep_total_temperature_violation))
-               # self.ep_total_temperature_violation = []
-               # self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", \
-               #    sum(self.ep_mean_total_temperature_violation_rolling)/len(self.ep_mean_total_temperature_violation_rolling), \
-               #        self.num_timesteps)
+               # # EP Total Temperature Violation 의 rolling 평균 계산 (최근 100개 에피소드)
+               # # self.ep_mean_total_temperature_violation_rolling.append(sum(self.ep_total_temperature_violation))
+               # # self.ep_total_temperature_violation = []
+               # # self.writer.add_scalar("perf/ep_mean_total_temperature_violation_rolling", \
+               # #    sum(self.ep_mean_total_temperature_violation_rolling)/len(self.ep_mean_total_temperature_violation_rolling), \
+               # #        self.num_timesteps)
 
       # 매 10 스텝마다 강제로 flush (즉시 반영)
       if self.num_timesteps % 10 == 0:
          self.writer.flush()
 
-
-      # 스텝별 보상값 기록
-      # step_rewards = self.locals.get('rewards')
-      # self.writer.add_scalar("result/step_reward", step_rewards, self.num_timesteps)
-
-      # if (self.num_timesteps % 4) == 0:
-      # self.logger.record('result/reward', float(info.get('reward')))
-
-      # print(f'======> reward : {info.get("reward")}\n')
-      # print(
-      #     f'======> n_step : {
-      #         self.model.n_steps}, n_envs: {
-      #         self.model.n_envs}\n')
-
       return True
 
-   # def _on_rollout_end(self) -> None:
-   #     if self._energy_buffer:
-   #         self.logger.record("custom/energy_rollout_mean",
-   #                            float(np.mean(self._energy_buffer)))
-   #         self._energy_buffer.clear()
    def _on_training_end(self) -> None:
       """훈련 종료 시 TensorBoard writer 정리"""
       self.writer.flush()  # 버퍼에 남은 데이터 모두 기록
@@ -362,10 +335,7 @@ class SinergymTBCallback(BaseCallback):
 
 
 
-
-# -----------------------------------------------------------------------------
 # GPU 사용 가능 여부 확인
-# ----------------------------------------------------------------------------- 
 # PPO with MlpPolicy는 GPU보다 CPU가 더 빠름, 아래 경고메시지 참고 (by jclee)
 # /usr/local/lib/python3.12/dist-packages/stable_baselines3/common/on_policy_algorithm.py:150: UserWarning: You are trying to run PPO on the GPU, but it is primarily intended to run on the CPU when not using a CNN policy (you are using ActorCriticPolicy which should be a MlpPolicy). See https://github.com/DLR-RM/stable-baselines3/issues/1245 for more info. You can pass `device='cpu'` or `export CUDA_VISIBLE_DEVICES=` to force using the CPU.Note: The model will train, but the GPU utilization will be poor and the training might take longer than on CPU.
 device = 'cpu'
@@ -378,10 +348,7 @@ device = 'cpu'
 #    print("GPU를 사용할 수 없습니다. CPU로 실행됩니다.")
 
 
-
-# ----------------------------------------------------------------------------- 
 # PPO 모델 생성 (기본 하이퍼 파라미터사용)
-# ----------------------------------------------------------------------------- 
 # model = PPO('MlpPolicy', env, verbose=1, tensorboard_log='./tb_logs')
 
 # PPO 모델 생성 (GPU 사용 설정 및 최적화된 하이퍼파라미터)
@@ -431,12 +398,12 @@ model = PPO(
 callbacks = []
 
 # 평가 콜백 설정 (모델 저장 및 평가 로깅)
-eval_callback = LoggerEvalCallback(
-   eval_env=eval_env,  # 평가 환경
-   train_env=env,  # 훈련 환경
-   n_eval_episodes=1,  # 평가 에피소드 수
-   eval_freq_episodes=2,  # 평가 주기 (2 에피소드마다)
-   deterministic=True)  # 결정적 정책 사용
+# eval_callback = LoggerEvalCallback(
+#    eval_env=eval_env,  # 평가 환경
+#    train_env=env,  # 훈련 환경
+#    n_eval_episodes=1,  # 평가 에피소드 수
+#    eval_freq_episodes=2,  # 평가 주기 (2 에피소드마다)
+#    deterministic=True)  # 결정적 정책 사용
 
 
 # 콜백들을 리스트에 추가
@@ -481,20 +448,14 @@ print('===> Is the action space discrete?: {}'.format(
    env.get_wrapper_attr('is_discrete')))
 
 
-# -----------------------------------------------------------------------------
 # 모델 훈련 실행
-# ----------------------------------------------------------------------------- 
 model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_' + extra_name)  # TensorBoard 로그 이름
-   # tb_log_name='cav_ppo_dymanic_preference_reorder_wrapper')  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo_ew_0.5')  # TensorBoard 로그 이름
 
-
-# -----------------------------------------------------------------------------
 # 훈련된 모델 저장
-# ----------------------------------------------------------------------------- 
 model.save(env.get_wrapper_attr('workspace_path') + '/model')
 
 # 주석 처리된 수동 에피소드 실행 코드
