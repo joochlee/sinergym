@@ -199,9 +199,10 @@ class LinearReward4Light(BaseReward):
         min_dim : float = 0.7,
         ess_total : float = 300000,
         min_soc : float = 0.1,
-        ess_weight : float = 0.3,
-        grid_weight : float = 0.3,
-        dim_weight : float = 0.4,
+        ess_weight : float = 0.2,
+        ess_soc_weight : float = 0.5,
+        grid_weight : float = 0.2,
+        dim_weight : float = 0.1,
         lighting_power_design_level : float = 1000.0,
         lambda_energy: float = 1.0,
         lambda_temperature: float = 1.0
@@ -229,10 +230,10 @@ class LinearReward4Light(BaseReward):
         super().__init__()
 
         # Basic validations
-        if not (0 <= ess_weight + grid_weight <= 1):
-            self.logger.error(
-                f'sum of all weights must be between 0 and 1. Received: ess_weight : {ess_weight}, grid_weight: {grid_weight}')
-            raise ValueError
+        # if not (0 <= ess_weight + grid_weight + dim_weight <= 1):
+        #     self.logger.error(
+        #         f'sum of all weights must be between 0 and 1. Received: ess_weight : {ess_weight}, grid_weight: {grid_weight}')
+        #     raise ValueError
         if not all(isinstance(v, str)
                    for v in energy_variables):
             self.logger.error('All variable names must be strings.')
@@ -251,6 +252,7 @@ class LinearReward4Light(BaseReward):
         self.ess_total = ess_total
         self.min_soc = min_soc
         self.W_ess = ess_weight
+        self.W_ess_soc = ess_soc_weight
         self.W_grid = grid_weight
         self.W_dim = dim_weight
         self.lighting_power_design_level = lighting_power_design_level
@@ -309,6 +311,7 @@ class LinearReward4Light(BaseReward):
             # 'total_temperature_violation': self.total_temp_violation,
             # 'reward_weight': self.W_energy
             'ess_weight' : self.W_ess,
+            'ess_soc_weight' : self.W_ess_soc,
             'grid_weight' : self.W_grid,
             'ess_weight' : self.W_ess
         }
@@ -343,31 +346,6 @@ class LinearReward4Light(BaseReward):
         return [max(0.0, self.min_dim - E/self.lighting_power_design_level)
                 for E in energy_values]
 
-
-    # def _get_temperature_violation(
-    #         self, obs_dict: Dict[str, Any]) -> List[float]:
-    #     """Calculate the temperature violation (ºC) in each observation's temperature variable.
-
-    #     Returns:
-    #         List[float]: List with temperature violation in each zone.
-    #     """
-
-    #     # Current datetime and summer period
-    #     current_dt = datetime(
-    #         YEAR, int(
-    #             obs_dict['month']), int(
-    #             obs_dict['day_of_month']))
-    #     summer_start_date = datetime(YEAR, *self.summer_start)
-    #     summer_final_date = datetime(YEAR, *self.summer_final)
-
-    #     temp_range = self.range_comfort_summer if \
-    #         summer_start_date <= current_dt <= summer_final_date else \
-    #         self.range_comfort_winter
-
-    #     temp_values = [obs_dict[v] for v in self.temp_names]
-
-    #     return [max(temp_range[0] - T, 0, T - temp_range[1])
-    #             for T in temp_values]
 
     def _get_reward(self) -> Tuple[float, ...]:
         """

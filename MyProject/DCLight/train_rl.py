@@ -103,10 +103,13 @@ class ObsRewardWrapper(gym.Wrapper):
       # print(f'\n===> before reward \n{reward}\n')
 
       ess_soc = random.uniform(0.0, 1.0)
-      grid_usage = random.uniform(0.0, 20000.0)
+      if ess_soc <= info['min_soc']:
+         grid_usage = random.uniform(0.0, 20000.0)
+      else:
+         grid_usage = 0.0
       dim_level = info['dim_level']
 
-      shaped_reward = reward - info['ess_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
+      shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
 
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
@@ -219,6 +222,7 @@ class SinergymTBCallback(BaseCallback):
          obs = self.locals["new_obs"]  # 현재 step의 관측값
          # print("===> Current observation:", obs)
          self.writer.add_scalar("perf/ess_soc", obs[0][-3], self.num_timesteps)
+         self.writer.add_scalar("perf/grid_usage", obs[0][-2], self.num_timesteps)
 
 
 

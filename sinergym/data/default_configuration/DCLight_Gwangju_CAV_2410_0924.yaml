@@ -125,16 +125,19 @@ reward_kwargs:
   ess_total: 300000.0
 
   # 최소 SoC
-  min_soc : 0.1
+  min_soc : 0.5
 
   # ESS 사용 가중치
-  ess_weight: 0.3
+  ess_weight: 1
+
+  # SoC 가중치
+  ess_soc_weight: 5
 
   # grid 사용 가중치
-  grid_weight: 0.3
+  grid_weight: 10
 
   # 최소 dimming 가중치
-  dim_weight: 0.4
+  dim_weight: 3
 
   # 내부변수 "Lighting Power Design Level"의 설정값.
   # 이 값은 lights 객체의 Lighting Level 속성값에 해당함
@@ -147,5 +150,5 @@ reward_kwargs:
   # energy_weight: 0.3
   
   
-  lambda_energy: 1.0e-4
+  lambda_energy: 1.0e-3
   lambda_temperature: 1.0
