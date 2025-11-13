@@ -119,25 +119,25 @@ reward_kwargs:
   #   - 30
 
   # 조명밝기 하한선
-  min_dim: 0.7
+  min_dim: 0.5
 
   # ess 용량
   ess_total: 300000.0
 
   # 최소 SoC
-  min_soc : 0.5
+  min_soc : 0.05
 
   # ESS 사용 가중치
   ess_weight: 1
 
   # SoC 가중치
-  ess_soc_weight: 5
+  ess_soc_weight: 15
 
   # grid 사용 가중치
-  grid_weight: 10
+  grid_weight: 30
 
   # 최소 dimming 가중치
-  dim_weight: 3
+  dim_weight: 7
 
   # 내부변수 "Lighting Power Design Level"의 설정값.
   # 이 값은 lights 객체의 Lighting Level 속성값에 해당함

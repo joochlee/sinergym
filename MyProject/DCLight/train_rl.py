@@ -109,7 +109,7 @@ class ObsRewardWrapper(gym.Wrapper):
          grid_usage = 0.0
       dim_level = info['dim_level']
 
-      shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
+      shaped_reward = reward*ess_soc - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
 
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
@@ -137,7 +137,7 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-DCLight-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 100  # 훈련 에피소드 수
+episodes = 200  # 훈련 에피소드 수
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
