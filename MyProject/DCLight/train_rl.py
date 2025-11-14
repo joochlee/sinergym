@@ -105,11 +105,16 @@ class ObsRewardWrapper(gym.Wrapper):
       ess_soc = random.uniform(0.0, 1.0)
       if ess_soc <= info['min_soc']:
          grid_usage = random.uniform(0.0, 20000.0)
+         weighted_ess_soc = ess_soc * 0.5
       else:
          grid_usage = 0.0
+         weighted_ess_soc = ess_soc * 0.8
       dim_level = info['dim_level']
 
-      shaped_reward = reward*ess_soc - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
+      self.unwrapped.reward_fn.set_ess_soc(ess_soc)
+
+      shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) \
+         - info['grid_weight']*grid_usage*info['lambda_energy']
 
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)

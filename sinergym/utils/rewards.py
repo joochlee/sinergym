@@ -251,6 +251,7 @@ class LinearReward4Light(BaseReward):
         self.min_dim = min_dim
         self.ess_total = ess_total
         self.min_soc = min_soc
+        self.ess_soc = 1.0
         self.W_ess = ess_weight
         self.W_ess_soc = ess_soc_weight
         self.W_grid = grid_weight
@@ -265,6 +266,9 @@ class LinearReward4Light(BaseReward):
         # self.summer_final = summer_final  # (month, day)
 
         self.logger.info('Reward function initialized.')
+
+    def set_ess_soc(self, new_ess_soc:float):
+        self.ess_soc = new_ess_soc
 
     def __call__(self, obs_dict: Dict[str, Any]
                  ) -> Tuple[float, Dict[str, Any]]:
@@ -281,7 +285,7 @@ class LinearReward4Light(BaseReward):
         # lights_electricity_rate 값 저장
         energy_values = self._get_energy_consumed(obs_dict)
         self.total_energy = sum(energy_values)
-        self.energy_penalty = self.total_energy
+        self.energy_penalty = -self.total_energy
 
         # 조명 최소밝기 violation 계산
         dim_violations = self._get_dim_violation(obs_dict)
@@ -363,7 +367,7 @@ class LinearReward4Light(BaseReward):
         Returns:
             Tuple[float, ...]: 부분 reward 및 계산된 term 들.
         """
-        ess_term = self.lambda_energy * self.W_ess * self.energy_penalty
+        ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)/self.ess_soc
         dim_term = self.W_dim * self.dim_penalty
         
         reward = ess_term + dim_term

@@ -265,7 +265,7 @@ device = 'cpu'
 # MODEL_PATH = './trained_model/model_ew_0.7.zip'
 # MODEL_PATH = './trained_model/model_ew_0.3.zip'
 # MODEL_PATH = './trained_model/model_dynamic_pref_11.11.zip'
-MODEL_PATH = './trained_model/model_dynamic_pref_11.12.zip'
+MODEL_PATH = './trained_model/model_dynamic_pref_11.13.zip'
 LOG_DIR = './tb_logs/evaluation'
 
 # save된 학습모델 로딩

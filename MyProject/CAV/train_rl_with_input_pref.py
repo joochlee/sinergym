@@ -146,7 +146,7 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 1200  # 훈련 에피소드 수
+episodes = 1000  # 훈련 에피소드 수
 
 # extraname
 extra_name = 'with-random-pref'
@@ -488,7 +488,7 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_' + extra_name)  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo_' + extra_name + '-episodes-' + str(episodes) + '_' + experiment_date)  # TensorBoard 로그 이름
    # tb_log_name='cav_ppo_dymanic_preference_reorder_wrapper')  # TensorBoard 로그 이름
 
 
