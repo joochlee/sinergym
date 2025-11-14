@@ -128,16 +128,20 @@ reward_kwargs:
   min_soc : 0.05
 
   # ESS 사용 가중치
+  # ess_weight: 3
   ess_weight: 1
 
-  # SoC 가중치
-  ess_soc_weight: 20
+  # ESS SoC 하향 페널티 가중치
+  # ess_soc_weight: 20
+  ess_soc_weight: 5
 
-  # grid 사용 가중치
-  grid_weight: 30
+  # grid 사용 페널티 가중치
+  # grid_weight: 20
+  grid_weight: 7
 
-  # 최소 dimming 가중치
-  dim_weight: 15
+  # 최소 dimming 하향 페넡티 가중치
+  # dim_weight: 15
+  dim_weight: 10
 
   # 내부변수 "Lighting Power Design Level"의 설정값.
   # 이 값은 lights 객체의 Lighting Level 속성값에 해당함

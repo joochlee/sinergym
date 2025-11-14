@@ -488,6 +488,7 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
+   tb_log_name=experiment_name)  # TensorBoard 로그 이름
    tb_log_name='cav_ppo_' + extra_name + '-episodes-' + str(episodes) + '_' + experiment_date)  # TensorBoard 로그 이름
    # tb_log_name='cav_ppo_dymanic_preference_reorder_wrapper')  # TensorBoard 로그 이름
 

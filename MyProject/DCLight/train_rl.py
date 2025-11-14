@@ -142,11 +142,14 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-DCLight-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 200  # 훈련 에피소드 수
+episodes = 500  # 훈련 에피소드 수
+
+# extraname
+extra_name = ''
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
-experiment_name = 'SB3_PPO-' + environment + \
+experiment_name = 'SB3_PPO-' + environment + extra_name +\
    '-episodes-' + str(episodes)
 experiment_name += '_' + experiment_date
 
@@ -462,7 +465,7 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_ew_0.5')  # TensorBoard 로그 이름
+   tb_log_name = experiment_name)  # TensorBoard 로그 이름
 
 # 훈련된 모델 저장
 model.save(env.get_wrapper_attr('workspace_path') + '/model')
