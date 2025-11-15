@@ -37,18 +37,22 @@ from stable_baselines3.common.monitor import Monitor
 from torch.utils.tensorboard import SummaryWriter
 import torch
 
-# =============================================================================
 
-def transform_action(action):
-   """
-   액션을 변환하는 함수
-   연속값 2개와 이산값 1개를 처리하여 적절한 형태로 변환
-   """
-   continuous1 = action[0]  # 첫 번째 연속 액션
-   continuous2 = action[1]  # 두 번째 연속 액션
-   discrete = int(np.round(action[2]))  # 이산 액션을 정수로 변환
-   discrete = np.clip(discrete, 0, 1)  # 0 또는 1로 제한
-   return np.array([continuous1, continuous2, discrete], dtype=np.float32)
+# -----------------------------------------------------------------------------
+# 에너지 소진레벨 선호도 추가용 wrapper
+# ----------------------------------------------------------------------------- 
+# 에너지 소진레벨 선호 정의 (벡터 + 가중치)
+PREFERENCE_MAP = {
+   "economical": {
+      "vec": np.array([1.0, 0.0]),
+      "reward_weight": 0.8  # (에너지, 쾌적도)
+   },
+   "comfort": {
+      "vec": np.array([0.0, 1.0]),
+      "reward_weight": 0.2
+   }
+}
+
 
 
 # =============================================================================
@@ -111,7 +115,6 @@ class ObsRewardWrapper(gym.Wrapper):
          weighted_ess_soc = ess_soc * 0.8
       dim_level = info['dim_level']
 
-      # 현재 SoC를 reward계산에 활용할 수 있도록 업데이트해준다
       self.unwrapped.reward_fn.set_ess_soc(ess_soc)
 
       shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) \
@@ -170,7 +173,7 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 # env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
 env = ObsRewardWrapper(env)
 env = NormalizeAction(env)  # 액션 정규화
-env = NormalizeObservation(env)  # 관찰값 정규화
+# env = NormalizeObservation(env)  # 관찰값 정규화
 # env = LoggerWrapper(env)  # 로깅 래퍼
 # env = CSVLogger(env)  # CSV 로깅
 # env = Monitor(env)  # 모니터링

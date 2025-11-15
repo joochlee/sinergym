@@ -125,21 +125,23 @@ reward_kwargs:
   ess_total: 300000.0
 
   # 최소 SoC
-  min_soc : 0.05
+  min_soc : 0.1
 
   # ESS 사용 가중치
-  # ess_weight: 3
   ess_weight: 1
 
   # ESS SoC 하향 페널티 가중치
-  # ess_soc_weight: 20
-  ess_soc_weight: 5
+  # ess_soc_weight: 6
+  # ess_soc_weight: 2
+  ess_soc_weight: 1
 
   # grid 사용 페널티 가중치
-  # grid_weight: 20
-  grid_weight: 7
+  # grid_weight: 8
+  # grid_weight: 3
+  grid_weight: 1
 
   # 최소 dimming 하향 페넡티 가중치
+  # dim_weight: 1
   # dim_weight: 15
   dim_weight: 10
 

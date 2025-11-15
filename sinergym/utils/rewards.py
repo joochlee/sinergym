@@ -285,6 +285,7 @@ class LinearReward4Light(BaseReward):
         # lights_electricity_rate 값 저장
         energy_values = self._get_energy_consumed(obs_dict)
         self.total_energy = sum(energy_values)
+        # self.energy_penalty = self.total_energy
         self.energy_penalty = -self.total_energy
 
         # 조명 최소밝기 violation 계산
@@ -368,6 +369,7 @@ class LinearReward4Light(BaseReward):
             Tuple[float, ...]: 부분 reward 및 계산된 term 들.
         """
         ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)/self.ess_soc
+        # ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)*self.ess_soc
         dim_term = self.W_dim * self.dim_penalty
         
         reward = ess_term + dim_term
