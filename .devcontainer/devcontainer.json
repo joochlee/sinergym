@@ -1,20 +1,24 @@
 {
-	"name": "sinergym_GPU",
+	// "name": "sinergym_GPU",
+	"name": "sinergym",
 	"containerEnv": {
 		"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}"
 	},
 	"build": {
 		"args": {
-			"ENERGYPLUS_VERSION": "24.1.0",
-			"ENERGYPLUS_INSTALL_VERSION": "24-1-0",
-			"ENERGYPLUS_SHA": "9d7789a3ac",
+			// "ENERGYPLUS_VERSION": "24.1.0",
+			// "ENERGYPLUS_INSTALL_VERSION": "24-1-0",
+			// "ENERGYPLUS_SHA": "9d7789a3ac",
+			"ENERGYPLUS_VERSION": "25.2.0",
+			"ENERGYPLUS_INSTALL_VERSION": "25-2-0",
+			"ENERGYPLUS_SHA": "cf7368216c",
 			"WANDB_API_KEY": "${localEnv:WANDB_API_KEY}",
 			"SINERGYM_EXTRAS" : "extras"
 		}
 	},
-	"runArgs": [
-    "--gpus=all"
-  ],
+	// "runArgs": [
+  //   "--gpus=all"
+  // ],
 	"dockerFile": "./Dockerfile",
 	"context": "..",
 	"customizations": {
@@ -80,7 +84,13 @@
 				"trond-snekvik.simple-rst",
 				"ue.alphabetical-sorter",
 				"yzhang.markdown-all-in-one",
-				"zeshuaro.vscode-python-poetry"
+				"zeshuaro.vscode-python-poetry",
+				"google.geminicodeassist",
+				"BigLadder.energyplus-modelkit",
+				"jsynowiec.vscode-insertdatestring",
+				"christian-kohler.path-intellisense",
+				"jebbs.plantuml",
+				"dbankier.vscode-quick-select"
 			]
 		}
 	}

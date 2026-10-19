@@ -265,7 +265,7 @@ device = 'cpu'
 # MODEL_PATH = './trained_model/model_ew_0.7.zip'
 # MODEL_PATH = './trained_model/model_ew_0.3.zip'
 # MODEL_PATH = './trained_model/model_dynamic_pref_11.11.zip'
-MODEL_PATH = './trained_model/model_dynamic_pref_11.13.zip'
+MODEL_PATH = './trained_model/model_dynamic_pref_11.14.zip'
 LOG_DIR = './tb_logs/evaluation'
 
 # save된 학습모델 로딩
@@ -358,8 +358,8 @@ for episode in range(episodes):
       if steps == 8600:
          env.set_pref('economical')
          # env.set_pref('comfort')
-      # elif steps == 14000:
-      #    env.set_pref('comfort')
+      elif steps == 14000:
+         env.set_pref('comfort')
 
       # if steps < 8600:
       #    power_demand_0 += info['total_power_demand']

@@ -184,7 +184,9 @@ class LinearReward(BaseReward):
         return reward, energy_term, comfort_term
 
 
+# =============================================================================
 # by jclee (2025-11-12)
+# =============================================================================
 class LinearReward4Light(BaseReward):
 
     def __init__(
@@ -305,6 +307,8 @@ class LinearReward4Light(BaseReward):
         reward_terms = {
             'ess_term': ess_term,
             'dim_term' : dim_term,
+            'min_dim' : self.min_dim,
+            'ess_total' : self.ess_total,
             'min_soc' : self.min_soc,
             # 'grid_term': grid_term,
             'energy_penalty': self.energy_penalty,
@@ -338,7 +342,7 @@ class LinearReward4Light(BaseReward):
 
     def _get_dim_violation(
             self, obs_dict: Dict[str, Any]) -> List[float]:
-        """조명의 현재 밝기와 최소밝기와의 오차를 계산, 최소보다 밝으면 0 리턴
+        """조명의 현재 밝기와 허용 하한선 밝기와의 오차를 계산, 최소보다 밝으면 0 리턴
 
         Args:
             obs_dict (Dict[str, Any]): EP의 출력변수 사전 (str: key 값)
@@ -347,6 +351,9 @@ class LinearReward4Light(BaseReward):
             List[float]: dim violation 값들의 리스트
         """
         energy_values = [obs_dict[v] for v in self.energy_names]
+
+        # XXX 현재 dimming level 을 저장해 둠 
+        self.current_dim = energy_values[0]/self.lighting_power_design_level
 
         return [max(0.0, self.min_dim - E/self.lighting_power_design_level)
                 for E in energy_values]
@@ -368,8 +375,37 @@ class LinearReward4Light(BaseReward):
         Returns:
             Tuple[float, ...]: 부분 reward 및 계산된 term 들.
         """
-        ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)/self.ess_soc
-        # ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)*self.ess_soc
+        # ==================== 원래 사용했던 보상 공식 ====================
+        # 옐로우 레이블
+        # ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)/self.ess_soc
+        # 그린 레이블
+        # # ess_term = (self.lambda_energy * self.W_ess * self.energy_penalty)*self.ess_soc
+        # =============================================================
+        
+        # ==================== 새로만든 보상 공식 (2026-03-04 10:43:10) ====================
+        # 그린 레이블
+        # XXX 보상공시 2차 수정 : 하락시 하락속도 서서히 높아짐
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - max(self.min_dim, min(1.0, 1.8*self.ess_soc - 0.5*self.ess_soc*self.ess_soc)))
+
+        # XXX 보상공식 설정
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - max(self.min_dim, min(1.0, self.ess_soc + 0.5*self.ess_soc*self.ess_soc)))
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - min(1.0, self.ess_soc + self.ess_soc*self.ess_soc))
+        # ess_term = -1 * self.lambda_energy * self.W_ess * abs(self.current_dim - min(1.0, self.ess_soc + self.ess_soc*self.ess_soc))
+        
+        # 옐로우 레이블
+        # XXX 보상공식 4차 수정 : 하락시 하락속도 서서히 낮아짐 
+        ess_term = -1 * self.W_ess * abs(self.current_dim - max(self.min_dim, 0.7*self.ess_soc + 0.5*self.ess_soc*self.ess_soc - 0.2))
+
+        # XXX 보상공식 3차 수정 : 하락시 하락속도 서서히 낮아짐 
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - max(self.min_dim, 1.3*self.ess_soc + 0.1*self.ess_soc*self.ess_soc - 0.4))
+
+
+        # XXX 재수정 공식 : SoC 0.3 이하부터 dim 이 1로 확 튀는 문제 발생
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - max(self.min_dim, 2*self.ess_soc - 0.5*self.ess_soc*self.ess_soc - 0.5))
+        # ess_term = -1 * self.W_ess * abs(self.current_dim - max(0, 2*self.ess_soc - 0.5*self.ess_soc*self.ess_soc - 0.5))
+        # ess_term = -1 * self.lambda_energy * self.W_ess * abs(self.current_dim - max(0, 2*self.ess_soc - 0.5*self.ess_soc*self.ess_soc - 0.5))
+        # =============================================================
+
         dim_term = self.W_dim * self.dim_penalty
         
         reward = ess_term + dim_term

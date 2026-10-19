@@ -13,9 +13,12 @@ FROM --platform=linux/amd64 ubuntu:${UBUNTU_VERSION}
 # -------------------------------- ENERGYPLUS -------------------------------- #
 
 # VERSION ARGUMENTS
-ARG ENERGYPLUS_VERSION=24.1.0
-ARG ENERGYPLUS_INSTALL_VERSION=24-1-0
-ARG ENERGYPLUS_SHA=9d7789a3ac
+# ARG ENERGYPLUS_VERSION=24.1.0
+# ARG ENERGYPLUS_INSTALL_VERSION=24-1-0
+# ARG ENERGYPLUS_SHA=9d7789a3ac
+ARG ENERGYPLUS_VERSION=25.2.0
+ARG ENERGYPLUS_INSTALL_VERSION=25-2-0
+ARG ENERGYPLUS_SHA=cf7368216c
 
 #ENV CONFIGURATION
 ENV ENERGYPLUS_TAG=v$ENERGYPLUS_VERSION
@@ -27,6 +30,8 @@ ENV ENERGYPLUS_DOWNLOAD_FILENAME EnergyPlus-$ENERGYPLUS_VERSION-$ENERGYPLUS_SHA-
 ENV ENERGYPLUS_DOWNLOAD_URL $ENERGYPLUS_DOWNLOAD_BASE_URL/$ENERGYPLUS_DOWNLOAD_FILENAME
 # Python add pyenergyplus path in order to detect API package
 ENV PYTHONPATH="/usr/local/EnergyPlus-${ENERGYPLUS_INSTALL_VERSION}"
+
+
 
 # ---------------------------------- PYTHON ---------------------------------- #
 
@@ -59,7 +64,11 @@ ENV LC_ALL=C
 # --------------------- APT UPDATE AND MANDATORY PACKAGES -------------------- #
 
 RUN apt update && apt upgrade -y
-RUN apt install -y ca-certificates build-essential curl libx11-6 libexpat1 git wget python3 vim
+RUN apt install -y ca-certificates build-essential curl libx11-6 libexpat1 git wget python3 vim ripgrep language-pack-ko
+
+# ----------------------------- locale (by jclee) ---------------------------- #
+ENV LANG ko_KR.UTF-8
+ENV LC_ALL ko_KR.UTF-8
 
 # -------------------------- ENERGYPLUS INSTALLATION ------------------------- #
 

@@ -9,8 +9,12 @@ __pycache__/
 EnergyPlus*/
 
 # Simulation outputs
-Eplus-*/
 Sinergym_output/
+Eplus-*/
+SB3_PPO-*/
+train_output/
+eval_output/
+tb_logs/
 
 #Socket.cfg in tests
 socket.cfg

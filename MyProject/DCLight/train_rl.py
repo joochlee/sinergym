@@ -4,18 +4,18 @@ from collections import deque
 import gymnasium as gym
 import numpy as np
 
-from gymnasium.wrappers import TransformAction
+from gymnasium.wrappers import TransformAction, ClipReward
 from gymnasium import spaces
 
 
 # import sinergym
-# from sinergym.utils.logger import TerminalLogger
-# from sinergym.utils.wrappers import (
-#     CSVLogger,
-#     LoggerWrapper,
-#     NormalizeAction,
-#     NormalizeObservation,
-# )
+from sinergym.utils.logger import TerminalLogger, CustomFormatter
+from sinergym.utils.wrappers import (
+    CSVLogger,
+    LoggerWrapper,
+    NormalizeAction,
+    NormalizeObservation,
+)
 
 import sinergym
 from sinergym.utils.callbacks import *
@@ -39,6 +39,28 @@ import torch
 
 # =============================================================================
 
+# -----------------------------------------------------------------------------
+# 로거 설정
+# -----------------------------------------------------------------------------
+terminal_logger = TerminalLogger()
+custom_formatter = CustomFormatter()
+custom_formatter.log_format = "[%(name)s] (%(levelname)s) [%(filename)s::%(funcName)s] : %(message)s"
+custom_formatter.FORMATS = {
+    logging.DEBUG:    custom_formatter.grey     + custom_formatter.log_format + custom_formatter.reset,
+    logging.INFO:     custom_formatter.grey     + custom_formatter.log_format + custom_formatter.reset,
+    logging.WARNING:  custom_formatter.yellow   + custom_formatter.log_format + custom_formatter.reset,
+    logging.ERROR:    custom_formatter.red      + custom_formatter.log_format + custom_formatter.reset,
+    logging.CRITICAL: custom_formatter.bold_red + custom_formatter.log_format + custom_formatter.reset,
+}
+logger = terminal_logger.getLogger(
+   name='MAIN',
+   level=logging.INFO,
+   formatter=custom_formatter
+)
+
+
+# =============================================================================
+
 def transform_action(action):
    """
    액션을 변환하는 함수
@@ -53,28 +75,57 @@ def transform_action(action):
 
 # =============================================================================
 
-
+# -----------------------------------------------------------------------------
+# 에너지 소진레벨에 기반한 조명제어 강화학습 : 
+# 강화학습 모델에 전달되는 observation space의 확장 및 reward 재계산용 wrapper
+# ----------------------------------------------------------------------------- 
 class ObsRewardWrapper(gym.Wrapper):
    def __init__(self, env):
       super().__init__(env)
-      # assert preference_type in PREFERENCE_MAP
 
-      # self.preference_type = preference_type
-      # self.preference_vec = PREFERENCE_MAP[preference_type]["vec"]
-      # self.w_energy = PREFERENCE_MAP[preference_type]["reward_weight"]
+      # 학습에 사용할 SoC 의 시작값을 설정함
+      self.current_soc = 1.0
 
       # 상태 공간 확장 : 
       # - 기존 : (lights_electricity_rate)
       # - 확장 : (lights_electricity_rate, ess_soc, grid_usage, dim_level)
       orig_obs_space = self.observation_space
 
-      print(f'\n===> orig_obs_space \n{orig_obs_space}\n')
+      logger.info(f'\n===> orig_obs_space \n{orig_obs_space}\n')
 
-      self.observation_space = spaces.Box(
+      # self.observation_space = spaces.Box(
+      self.unwrapped.observation_space = spaces.Box(
          low=np.concatenate([orig_obs_space.low, [0.0, 0.0, 0.0]]),
          high=np.concatenate([orig_obs_space.high, [1.0, 20000.0, 1.0]]),
          dtype=np.float64
       )
+
+
+   def _update_soc(self, light_rate: float, ess_total: float) -> None:
+      """
+      매 20분마다 조명이 소모하는 전력을 받아서 현재 SoC를 업데이트함
+      - 방전 에너지 [Wh] = light_rate [W] × (20/60) [h]
+      
+      Args:
+         light_rate : 스마트조명 방전 순간전력 [W]
+         ess_total  : 배터리 총 용량 [Wh]
+      """
+      # print(f'\n===> initial self.current_soc \n{self.current_soc}\n')
+
+      discharge_wh = light_rate * (20 / 60)   # W → Wh 변환 (20분 기준)
+      new_soc = self.current_soc - (discharge_wh / ess_total)
+
+      # 새로운 SoC (0.2 ~ 1.0 클리핑)
+      # return float(np.clip(new_soc, 0.0, 1.0))
+      self.current_soc = float(np.clip(new_soc, 0.2, 1.0))
+
+      # print(f'\n===> light_rate : {light_rate}, discharge_wh : {discharge_wh}, new_soc : {new_soc}, self.current_soc : {self.current_soc}\n')
+
+   def _reset_start_soc(self):
+      """학습에 사용할 SoC의 시작값을 재설정한다
+      """
+      self.current_soc = random.uniform(0.7, 1.0)
+
 
    def reset(self, **kwargs):
       obs, info = self.env.reset(**kwargs)
@@ -84,9 +135,16 @@ class ObsRewardWrapper(gym.Wrapper):
       # self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
       # # energy weight를 선호도에 맞게 업데이트
       # self.unwrapped.reward_fn.W_energy = self.w_energy
+      
+      # 새로운 에피소드에서 사용할 SoC의 시작값을 업데이트함
+      self._reset_start_soc()
 
-      # 변경된 "선호도"를 상태에 업데이트함
-      obs = np.concatenate([obs, [1.0, 0.0, 0.0]])
+      # 초기화된 [ SoC, grid_usage, dim_level ] 을 observation space 에 추가함
+      obs = np.concatenate([obs, [self.current_soc, 0.0, 0.0]])
+
+      # print(f'\n===> obs \n{obs}\n')
+
+      # TODO: step()에서 수행하던 것처럼 info에 정보를 추가해줄 것
       return obs, info
 
    def step(self, action):
@@ -96,26 +154,46 @@ class ObsRewardWrapper(gym.Wrapper):
       # self.w_energy = PREFERENCE_MAP[self.preference_type]['reward_weight']
       # # energy weight를 선호도에 맞게 업데이트
       # self.unwrapped.reward_fn.W_energy = self.w_energy
+      
+      
+      # 현재 SoC를 reward계산에 활용할 수 있도록 업데이트해준다
+      # XXX: 중요 : SoC를 업데이트하기 전의 값을 알려주어야 한다
+      self.unwrapped.reward_fn.set_ess_soc(self.current_soc)
 
       obs, reward, done, truncated, info = self.env.step(action)
      
       # print(f'\n===> before obs \n{obs}\n')
       # print(f'\n===> before reward \n{reward}\n')
 
-      ess_soc = random.uniform(0.0, 1.0)
-      if ess_soc <= info['min_soc']:
-         grid_usage = random.uniform(0.0, 20000.0)
-         weighted_ess_soc = ess_soc * 0.5
-      else:
-         grid_usage = 0.0
-         weighted_ess_soc = ess_soc * 0.8
+      # XXX ============================= 원래 코드 ====================================
+      # ess_soc = random.uniform(0.0, 1.0)
+      # if ess_soc <= info['min_soc']:
+      #    grid_usage = random.uniform(0.0, 20000.0)
+      #    weighted_ess_soc = ess_soc * 0.5
+      # else:
+      #    grid_usage = 0.0
+      #    weighted_ess_soc = ess_soc * 0.8
+      # ==============================================================================
+
+      # 조명이 소모한 전력을 ESS 배터리의 잔여용량에서 제하고, 배터리의 현재 SoC를 업데이트해준다
+      self._update_soc(info['total_power_demand'], info['ess_total'])
+      
+      # XXX 만약 배터리가 소진되었으면 학습을 종료함
+      if self.current_soc == 0.2:
+         done = True
+      # if self.current_soc == 0.2:
+      #    self._reset_start_soc()
+
+      # XXX 계통에서 사용하고 있는 전력량
+      grid_usage = 0
+
+      # 스마트조명의 현재 밝기 저장
       dim_level = info['dim_level']
 
-      # 현재 SoC를 reward계산에 활용할 수 있도록 업데이트해준다
-      self.unwrapped.reward_fn.set_ess_soc(ess_soc)
 
-      shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - ess_soc) \
-         - info['grid_weight']*grid_usage*info['lambda_energy']
+      # XXX min SoC 와 grid usage 는 페널티를 먹어도 에이전트가 어떤행동을 해도 이를 개선할 수가 없으므로 일단 제외하자
+      shaped_reward = reward 
+      # shaped_reward = reward - info['ess_soc_weight']*max(0, info['min_soc'] - self.current_soc) - info['grid_weight']*grid_usage*info['lambda_energy']
 
       # ----- 원래 reward와 raw info 기반의 새로운 reward 계산 -----
       # Sinergym의 info에 따라 적절히 조정 필요 (예시는 아래 가정 기반)
@@ -124,35 +202,41 @@ class ObsRewardWrapper(gym.Wrapper):
 
       # shaped_reward = - (self.w_energy * energy + self.w_discomfort * discomfort)
 
-      obs = np.concatenate([obs, [ess_soc, grid_usage, dim_level]])
+      obs = np.concatenate([obs, [self.current_soc, grid_usage, dim_level]])
 
       # print(f'\n===> after obs \n{obs}\n')
-      
+      logger.info(f'\n===> self.current_soc \n{self.current_soc}\n')
+      logger.info(f'\n===> action \n{action}\n')
+
+      # XXX info 에 현재 SoC값을 저장해 준다. 일반적으로 info 는 ObservationNormalization wrapper에 의해서 normalize되지 않는다.
+      info['ess_soc'] = self.current_soc
+
       return obs, shaped_reward, done, truncated, info
 
 
 # =============================================================================
 
 
-# 로거 설정
-terminal_logger = TerminalLogger()
-logger = terminal_logger.getLogger(
-   name='MAIN',
-   level=logging.INFO
-)
 
+# -----------------------------------------------------------------------------
 # 환경 설정
+# ----------------------------------------------------------------------------- 
 environment = 'Eplus-DCLight-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 500  # 훈련 에피소드 수
+# XXX 학습 에피소드 횟수 설정
+episodes = 200  # 훈련 에피소드 수
 
-# extraname
-extra_name = ''
+# XXX extraname 설정
+# extra_name = '[ green_level 2nd_reward_revision W_dim-2.0 ]'
+# extra_name = '[ yellow_level 3rd_reward_revision W_dim-2.0 0.5to0.1 0.8to1.3 0.3to0.4]'
+extra_name = '[ yellow_level 4th_reward_revision W_dim-2.0 0.5x^2+0.7x-0.2 ]'
 
-# 실험 이름 생성 (날짜/시간 포함)
+# XXX 실험 이름 설정 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
-experiment_name = 'SB3_PPO-' + environment + extra_name +\
-   '-episodes-' + str(episodes)
-experiment_name += '_' + experiment_date
+experiment_name = 'SB3_PPO-' + environment + '-' + extra_name + '-'\
+   '[ episodes-' + str(episodes) + ' ]'
+# experiment_name = 'SB3_SAC-' + environment + '-' + extra_name + '-'\
+#    '[ episodes-' + str(episodes) + ' ]'
+experiment_name += '-[' + experiment_date +']'
 
 
 # 훈련용 환경 생성
@@ -166,14 +250,19 @@ print(f'\n===> workspace_path \n{env.get_wrapper_attr('workspace_path')}\n')
 # Create environment and apply wrappers for normalization and logging
 # env = gym.make('Eplus-CompassCAV-normal-continuous-stochastic-v1')
 
-# 훈련 환경에 래퍼 적용
+# -----------------------------------------------------------------------------
+# 훈련 환경에 래퍼 추가
+# ----------------------------------------------------------------------------- 
+# XXX 너무 큰 음수가 나오는 보상값을 보정함
+# env = ClipReward(env, min_reward= -2.0, max_reward = 0.0)
 # env = TransformAction(env, transform_action, env.action_space)  # 액션 변환
-env = ObsRewardWrapper(env)
+env = ObsRewardWrapper(env) # EP에서 제공되지 않는 state를 추가함
 env = NormalizeAction(env)  # 액션 정규화
 env = NormalizeObservation(env)  # 관찰값 정규화
 # env = LoggerWrapper(env)  # 로깅 래퍼
 # env = CSVLogger(env)  # CSV 로깅
 # env = Monitor(env)  # 모니터링
+
 
 # 평가 환경에 래퍼 적용
 # eval_env = TransformAction(eval_env, transform_action, eval_env.action_space)
@@ -183,7 +272,9 @@ eval_env = NormalizeAction(eval_env)
 # eval_env = CSVLogger(eval_env)
 # eval_env = Monitor(eval_env)
 
-
+# -----------------------------------------------------------------------------
+# 훈련과정에서 TB에 출력하기 위한 Callback 함수
+# ----------------------------------------------------------------------------- 
 class SinergymTBCallback(BaseCallback):
    def __init__(self, verbose=0):
       super().__init__(verbose)
@@ -230,14 +321,17 @@ class SinergymTBCallback(BaseCallback):
       if "new_obs" in self.locals:
          obs = self.locals["new_obs"]  # 현재 step의 관측값
          # print("===> Current observation:", obs)
-         self.writer.add_scalar("perf/ess_soc", obs[0][-3], self.num_timesteps)
-         self.writer.add_scalar("perf/grid_usage", obs[0][-2], self.num_timesteps)
+         # FIXME obs 값은 정규화된 값이므로 info 값을 보도록 수정할 것
+         # self.writer.add_scalar("perf/ess_soc", obs[0][-3], self.num_timesteps)
+         # self.writer.add_scalar("perf/grid_usage", obs[0][-2], self.num_timesteps)
 
 
+      self.writer.add_scalar("perf/ess_soc", info.get('ess_soc', 0.0), self.num_timesteps)
 
       # TensorBoard에 현재 스텝의 보상값을 기록 (카테고리: result/reward, 값: reward, x축: timesteps)
-      reward_value = info.get('reward', 0.0)
-      self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
+      # reward_value = info.get('reward', 0.0)
+      # self.writer.add_scalar("perf/step_reward", reward_value, self.num_timesteps)
+      self.writer.add_scalar("perf/step_reward", self.locals.get('rewards')[0], self.num_timesteps)
       
       ess_value = info.get('ess_term', 0.0)
       self.writer.add_scalar("perf/ess_term", ess_value, self.num_timesteps)
@@ -385,6 +479,8 @@ device = 'cpu'
 #       'net_arch': [dict(pi=[256, 256], vf=[256, 256])]  # GPU 사용 시 더 큰 네트워크
 #    } if device == 'cuda' else None
 # )
+
+# XXX 모델 변경
 model = PPO(
    'MlpPolicy', 
    env, 
@@ -405,6 +501,16 @@ model = PPO(
    #    'net_arch': [dict(pi=[256, 256], vf=[256, 256])]  # GPU 사용 시 더 큰 네트워크
    # } if device == 'cuda' else None
 )
+
+# model = SAC(
+#    'MlpPolicy', 
+#    env, 
+#    verbose=1, 
+#    tensorboard_log='./tb_logs',
+#    device=device,  # GPU 사용 설정
+#    learning_starts=1000,
+#    # learning_rate=3e-4,
+# )
 
 
 # 콜백 리스트 초기화
@@ -461,7 +567,9 @@ print('===> Is the action space discrete?: {}'.format(
    env.get_wrapper_attr('is_discrete')))
 
 
+# -----------------------------------------------------------------------------
 # 모델 훈련 실행
+# ----------------------------------------------------------------------------- 
 model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들

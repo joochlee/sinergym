@@ -19,6 +19,8 @@ weather_specification:
 # ---------------------------------------------------------------------------- #
 #                         BUILDING EXTRA CONFIGURATION                         #
 # ---------------------------------------------------------------------------- #
+# 3 인 경우 1 에피소드 당 step 수 (1년치 step 수) : 3 x 24 x 365 = 26,280 
+# 보상이 안정되는 스텝수 : 대략 2,000,000 steps = 대략 100 에피소드 정도
 building_config:
   timesteps_per_hour: 3
 
@@ -122,13 +124,14 @@ reward_kwargs:
   min_dim: 0.6
 
   # ess 용량
-  ess_total: 300000.0
+  # 200,000 Wh 로 가정
+  ess_total: 40000.0
 
   # 최소 SoC
   min_soc : 0.1
 
   # ESS 사용 가중치
-  ess_weight: 1
+  ess_weight: 1.0
 
   # ESS SoC 하향 페널티 가중치
   # ess_soc_weight: 6
@@ -143,10 +146,12 @@ reward_kwargs:
   # 최소 dimming 하향 페넡티 가중치
   # dim_weight: 1
   # dim_weight: 15
-  dim_weight: 10
+  # dim_weight: 10.0
+  dim_weight: 2.0
 
-  # 내부변수 "Lighting Power Design Level"의 설정값.
+  # 내부변수 "Lighting Power Design Level"의 설정값. (단위 : w)
   # 이 값은 lights 객체의 Lighting Level 속성값에 해당함
+  # 1 step 을 20분으로 했으면, 매 스텝별 소모전력은 대략 (lights_electricity_rate x 1/3) KWh 임
   # 원래는 python api를 통해서 내부변수의 값을 읽어와야 하나 일단 급해서 여기에 값을 적어둠 (2025-11-13)
   lighting_power_design_level : 1000.0
 

@@ -58,7 +58,10 @@ logger = terminal_logger.getLogger(
 
 # 환경 설정
 environment = 'Eplus-CompassCAV-normal-continuous-stochastic-v1'  # Sinergym 환경 ID
-episodes = 200  # 훈련 에피소드 수
+episodes = 400  # 훈련 에피소드 수
+
+# extraname
+extra_name = 'with-random-pref'
 
 # 실험 이름 생성 (날짜/시간 포함)
 experiment_date = datetime.today().strftime('%Y-%m-%d_%H:%M')
@@ -104,10 +107,10 @@ class SinergymTBCallback(BaseCallback):
       # self._energy_buffer = []  # 에너지 버퍼 (현재 사용하지 않음)
 
       self.ep_total_power_demand = []
-      self.ep_mean_total_power_demand_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
+      self.ep_mean_total_power_demand_rolling = deque(maxlen=20)  # 최근 100개 에피소드만 저장
 
       self.ep_total_temperature_violation = []
-      self.ep_mean_total_temperature_violation_rolling = deque(maxlen=10)  # 최근 100개 에피소드만 저장
+      self.ep_mean_total_temperature_violation_rolling = deque(maxlen=20)  # 최근 100개 에피소드만 저장
 
    def _on_training_start(self) -> None:
       """훈련 시작 시 TensorBoard writer 초기화"""
@@ -378,7 +381,8 @@ model.learn(
    total_timesteps=timesteps,  # 총 훈련 타임스텝
    callback=callback,  # 콜백 함수들
    log_interval=100,  # 로그 출력 주기
-   tb_log_name='cav_ppo_ew_0.5')  # TensorBoard 로그 이름
+   # tb_log_name='cav_ppo_ew_0.5')  # TensorBoard 로그 이름
+   tb_log_name='cav_ppo-' + extra_name + '-episodes-' + str(episodes) + '_' + experiment_date)  # TensorBoard 로그 이름
 
 # 훈련된 모델 저장
 model.save(env.get_wrapper_attr('workspace_path') + '/model')

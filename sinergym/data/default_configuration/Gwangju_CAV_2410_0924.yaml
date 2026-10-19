@@ -1,6 +1,6 @@
 # Documentation: https://ugr-sail.github.io/sinergym/compilation/main/pages/environments_registration.html
 # ---------------------------------------------------------------------------- #
-#                        ID BASE FROM ENVIRONMNET NAMES                        #
+#                        ID BASE FROM ENVIRONMENT NAMES                        #
 # ---------------------------------------------------------------------------- #
 id_base: CompassCAV
 
@@ -130,6 +130,7 @@ variables:
 
 # ------------------------------- OUTPUT:METERS ------------------------------ #
 meters:
+  # Electricity:Zone:CORE_ZN: total_electricity_core_zn
   Electricity:HVAC: total_electricity_HVAC
 
 # ---------------------------------------------------------------------------- #
@@ -138,7 +139,8 @@ meters:
 
 # --------------------------- ACTUATORS TO CONTROL --------------------------- #
 actuators:
-  # CAV 각 존 온도 설정값
+  # CAV 각 존 온도 설정값, 
+  # 5개의 존 (Core_ZN, PERIMETER_ZN_1, PERIMETER_ZN_2, PERIMETER_ZN_3, PERIMETER_ZN_4) 이 모두 heating, cooling 동일한 스케줄을 사용함
   # 히팅 온도 스케줄
   HTGSETP_SCH_NO_OPTIMUM:
     variable_name: Heating_Setpoint_RL
@@ -183,7 +185,9 @@ reward_kwargs:
     - perimeter_zn_3_mean_air_temperature
     - perimeter_zn_4_mean_air_temperature
   energy_variables:
+    # - total_electricity_HVAC
     - total_electricity_demand_rate
+    # - total_electricity_core_zn
   range_comfort_winter:
     - 20.0
     - 23.5
@@ -197,7 +201,7 @@ reward_kwargs:
     - 9
     - 30
   # 1. 전력소모 == 열쾌적성
-  energy_weight: 0.5
+  energy_weight: 0.7
   # 2. 전력소모에 더 중점
   # energy_weight: 0.7
   # 3. 열쾌적성에 더 중점
