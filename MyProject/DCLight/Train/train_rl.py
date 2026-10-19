@@ -24,6 +24,7 @@ from sinergym.utils.logger import WandBOutputFormat
 from sinergym.utils.rewards import *
 from sinergym.utils.wrappers import *
 
+import os
 import random
 
 from datetime import datetime
@@ -237,6 +238,23 @@ experiment_name = 'SB3_PPO-' + environment + '-' + extra_name + '-'\
 # experiment_name = 'SB3_SAC-' + environment + '-' + extra_name + '-'\
 #    '[ episodes-' + str(episodes) + ' ]'
 experiment_name += '-[' + experiment_date +']'
+
+
+# -----------------------------------------------------------------------------
+# sinergym 작업공간(EnergyPlus 출력) 폴더 생성 위치 지정 : <이 스크립트 위치>/train_output
+# - sinergym은 import 시점의 os.getcwd()를 constants.CWD에 고정하고,
+#   modeling._set_workspace_dir()에서 그 값을 작업공간 생성 위치로 사용한다.
+#   이를 지정하는 설정 파라미터가 없으므로 모듈 전역값을 직접 덮어쓴다.
+# - 프로세스의 실제 cwd는 바꾸지 않으므로 './tb_logs' 등 다른 상대경로는 영향받지 않는다.
+# - 반드시 gym.make() 호출 전에 실행되어야 한다.
+# -----------------------------------------------------------------------------
+import sinergym.config.modeling as sinergym_modeling
+
+WORKSPACE_OUTPUT_DIR = os.path.join(
+   os.path.dirname(os.path.abspath(__file__)), 'train_output')
+# 병렬 실행 방지용 .lock 파일도 이 폴더에 생성되므로 미리 만들어 두어야 한다
+os.makedirs(WORKSPACE_OUTPUT_DIR, exist_ok=True)
+sinergym_modeling.CWD = WORKSPACE_OUTPUT_DIR
 
 
 # 훈련용 환경 생성
